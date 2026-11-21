@@ -3,4 +3,6 @@ plugins { id("com.facebook.react.settings") }
 extensions.configure(com.facebook.react.ReactSettingsExtension){ ex -> ex.autolinkLibrariesFromCommand() }
 rootProject.name = 'OffgridMobile'
 include ':app'
+// The bundled chat model, as two Play AI packs (bundled-model.gradle).
+include ':chat_model', ':chat_mmproj'
 includeBuild('../node_modules/@react-native/gradle-plugin')

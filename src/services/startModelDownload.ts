@@ -65,6 +65,21 @@ async function fetchCompanions(modelId: string, modelKey: string, companions: Co
   }
 }
 
+/**
+ * A chat model that just arrived (a download, or a model pack that came with the app) becomes the chat
+ * model only when none is chosen: your last pick if it is still here, else the one that arrived. The
+ * intent classifier is never made the chat model. Messages waiting in the queue go once it is chosen.
+ */
+export function selectArrivedChatModel(model: DownloadedModel): void {
+  const app = useAppStore.getState();
+  if (app.activeModelId !== null || isClassifierModel(model.id, app.settings.classifierModelId)) return;
+  // The first entry of the list could be any older file, the intent classifier included.
+  const selected =
+    app.downloadedModels.find(item => item.id === app.lastTextModelId) ??
+    app.downloadedModels.find(item => item.id === model.id);
+  if (selected) activeModelService.selectTextModel(selected.id);
+}
+
 export interface StartModelDownloadOpts {
   /** Select a downloaded user model when the download began without a selection.
    * Hidden support-model downloads leave this off. */
@@ -173,17 +188,7 @@ export async function startModelDownload(
       // Standard completion: register + clear the in-flight entry so the UI reads
       // "downloaded" from downloadedModels, not a lingering 100% store entry.
       useAppStore.getState().addDownloadedModel(model);
-      const app = useAppStore.getState();
-      // The intent classifier is never made the chat model, even when its download comes back
-      // through a path that asks for auto-select (a queued download restored after a restart).
-      if (mayAutoSelect && app.activeModelId === null && !isClassifierModel(model.id, app.settings.classifierModelId)) {
-        // Your last pick if it is still here, else the model you just downloaded. The first entry
-        // of the list could be any older file, the intent classifier included.
-        const selected =
-          app.downloadedModels.find(item => item.id === app.lastTextModelId) ??
-          app.downloadedModels.find(item => item.id === model.id);
-        if (selected) activeModelService.selectTextModel(selected.id);
-      }
+      if (mayAutoSelect) selectArrivedChatModel(model);
       useDownloadStore.getState().remove(modelKey);
       opts.onRegistered?.(model);
     }, fail);

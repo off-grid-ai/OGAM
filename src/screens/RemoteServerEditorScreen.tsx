@@ -256,6 +256,7 @@ export const RemoteServerEditorScreen: React.FC = () => {
             testID="test-connection"
           />
           <Button
+            variant="hero"
             title={server ? 'Update server' : 'Add server'}
             onPress={form.handleSave}
             disabled={!form.testResult?.success}

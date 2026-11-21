@@ -13,7 +13,8 @@ const LOADER_LINE_BOX = 1.4;
 interface ButtonProps {
   title: string;
   onPress: () => void;
-  /** `hero`: the one main action on a screen, desktop's emerald pill. */
+  /** `hero`: the one main action on a screen or sheet: an emerald wash with emerald text (a solid
+   *  block of colour was too loud). An icon beside its label takes `colors.primary`. */
   variant?: 'primary' | 'hero' | 'secondary' | 'outline' | 'ghost' | 'danger';
   size?: 'small' | 'medium' | 'large';
   /** Highlighted state for toggle buttons */
@@ -81,7 +82,7 @@ export const Button: React.FC<ButtonProps> = ({
         // The dots, not a ring spinner: a rotating ring on a button reads as a retry glyph, so
         // "Pair" and "Share" both looked like they had failed the moment they started working.
         <LoadingDots
-          color={variant === 'hero' ? colors.onHero : variant === 'primary' ? colors.primary : colors.textSecondary}
+          color={variant === 'hero' || variant === 'primary' ? colors.primary : colors.textSecondary}
           style={styles[`loader_${size}`]}
         />
       ) : (
@@ -111,15 +112,13 @@ const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.borderLight,
   },
-  // As desktop's candy accent button: a pill of emerald blended into the page, a light top edge and a
-  // faint glow, not a bright block.
+  // The one main action: a wash of emerald, an emerald hairline and the brand's faint halo. Clearly the
+  // way on, without a block of colour (brand: "Primary actions carry a soft emerald halo").
   button_hero: {
-    backgroundColor: colors.heroFill,
+    backgroundColor: `${colors.primary}1A`,
     borderWidth: 1,
-    borderColor: colors.heroBorder,
-    // brand Mobile profile: buttons use an 8px radius.
-    borderRadius: 8,
-    boxShadow: 'inset 0px 1px 0px rgba(255,255,255,0.22), 0px 0px 22px rgba(52,211,153,0.14)',
+    borderColor: `${colors.primary}59`,
+    boxShadow: '0px 0px 22px rgba(52,211,153,0.12)',
   },
   button_secondary: {
     backgroundColor: 'transparent',
@@ -167,7 +166,7 @@ const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
     color: colors.primary,
   },
   text_hero: {
-    color: colors.onHero,
+    color: colors.primary,
     fontWeight: '500' as const,
   },
   text_secondary: {

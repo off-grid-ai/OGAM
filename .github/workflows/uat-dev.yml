@@ -160,6 +160,10 @@ jobs:
           # environment to the NDK's CMake, so every native compile goes through ccache.
           CMAKE_C_COMPILER_LAUNCHER: ccache
           CMAKE_CXX_COMPILER_LAUNCHER: ccache
+          # Three native compiles at a time, not ninja's six: the video runtime's biggest files take
+          # gigabytes each, and six of them ran the 16 GB runner out of memory (runner lost at ~63
+          # min). Read by android/app/src/main/cpp/CMakeLists.txt.
+          OFFGRID_NATIVE_JOBS: '3'
         run: bash scripts/uat.sh --build-only --android
       - uses: actions/upload-artifact@v4
         with:

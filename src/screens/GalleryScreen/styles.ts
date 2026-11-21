@@ -24,9 +24,9 @@ const createHeaderStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     alignItems: 'center' as const,
     paddingHorizontal: SPACING.xl,
     paddingVertical: SPACING.md,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.borderLight,
     ...headerSurface(colors, shadows),
+    // The tabs under it are the same bar: they carry the edge.
+    boxShadow: 'none',
     zIndex: 1,
   },
   // 44 pt frames pulled back, so the header keeps its height (Back was 32, Select 36).
@@ -234,6 +234,8 @@ const createVideoStyles = (colors: ThemeColors) => ({
   videoGroup: { ...cardSurface(colors), overflow: 'hidden' as const },
   videoDivider: { height: StyleSheet.hairlineWidth, backgroundColor: colors.borderLight, marginLeft: SPACING.lg },
   videoRowBody: { flex: 1 },
+  // On the title's first line, not centred on a two-line prompt (design doc principle 6).
+  videoRowIcon: { alignSelf: 'flex-start' as const },
   videoRowTitle: { color: colors.text },
   videoRowMeta: { color: colors.textMuted },
   videoPlayer: { width: '100%' as const, backgroundColor: colors.background },

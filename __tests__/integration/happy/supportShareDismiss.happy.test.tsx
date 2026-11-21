@@ -5,8 +5,7 @@
  * Row T096 (Area 14): "Trigger the rating ask → tap Rate → the sheet is dismissed (doesn't re-nag)".
  *
  * Heavy entry point: the REAL ChatScreen is mounted; the REAL generationService drives the REAL trigger
- * (checkSharePrompt increments the real textGenerationCount and emits the prompt on the 2nd text
- * generation, once per session). The REAL SharePromptSheet renders inside ChatScreen. We arrive at the
+ * (checkSharePrompt emits the prompt on the 3rd good reply in a row, once per session). The REAL SharePromptSheet renders inside ChatScreen. We arrive at the
  * sheet by SENDING real messages (never store.setState / emitSharePrompt), tap Rate, and assert on the
  * rendered UI and the store-dialog leaf:
  *   1. after Rate, the sheet is gone and the store's own review dialog was requested, AND
@@ -26,7 +25,7 @@ const SHEET_TITLE = 'Did that just work for you?';
 const RATE_LABEL = 'Rate Off Grid AI';
 
 describe('happy — support-share sheet dismisses after rating and does not re-nag (T096)', () => {
-  it('llama.cpp: 2nd generation shows the sheet; rating dismisses it; the 10th does not re-nag', async () => {
+  it('llama.cpp: 3rd good reply shows the sheet; rating dismisses it; the 10th does not re-nag', async () => {
     const h = await setupChatScreen({ navigation: 'real', engine: 'llama', platform: 'android' });
     h.render();
 
@@ -36,15 +35,15 @@ describe('happy — support-share sheet dismisses after rating and does not re-n
     const openURL = jest.spyOn(Linking, 'openURL').mockResolvedValue(undefined as never);
     const review = require('react-native-in-app-review').default.RequestInAppReview as jest.Mock;
 
-    // PRE-CONDITION: after the 1st generation the sheet must NOT be up (count===1 is skipped to avoid
-    // stacking sheets) — so a later "the sheet is present" assertion is a real observed transition, not a
-    // surface that was always on screen. (count===1 never schedules an emit, so no delay needed here.)
+    // PRE-CONDITION: after two good replies the sheet must NOT be up — so a later "the sheet is present"
+    // assertion is a real observed transition, not a surface that was always on screen.
     await h.send('first prompt', { text: 'reply one' });
+    await h.send('second prompt', { text: 'reply two' });
+    await h.settle(1700);
     expect(h.view!.queryByText(SHEET_TITLE)).toBeNull();
 
-    // GESTURE → TRIGGER: the 2nd text generation. The REAL checkSharePrompt increments the count to 2,
-    // shouldShowSharePrompt(2) is true, and (since not engaged) emits the prompt after the real delay.
-    await h.send('second prompt', { text: 'reply two' });
+    // GESTURE → TRIGGER: the 3rd good reply in a row; since not engaged, the prompt goes after the delay.
+    await h.send('third prompt', { text: 'reply three' });
     await h.rtl.waitFor(() => { expect(h.view!.getByText(SHEET_TITLE)).toBeTruthy(); }, { timeout: 15000 });
     expect(h.view!.getByText(RATE_LABEL)).toBeTruthy();
 
@@ -64,7 +63,7 @@ describe('happy — support-share sheet dismisses after rating and does not re-n
 
     // "RETURN TO APP" + keep using it: drive generations up to the every-10th re-trigger count (10). If the
     // re-nag guard were broken, checkSharePrompt(10) would emit the prompt again and the sheet would reappear.
-    for (let i = 3; i <= 10; i++) {
+    for (let i = 4; i <= 10; i++) {
       await h.send(`prompt ${i}`, { text: `reply ${i}` });
     }
     await h.settle(1700); // past the delay again — give any (erroneous) re-emit time to render the sheet
@@ -78,9 +77,10 @@ describe('happy — support-share sheet dismisses after rating and does not re-n
     h.render();
 
     await h.send('first opt-out prompt', { text: 'reply one' });
+    await h.send('second opt-out prompt', { text: 'reply two' });
     expect(h.view!.queryByText(SHEET_TITLE)).toBeNull();
 
-    await h.send('second opt-out prompt', { text: 'reply two' });
+    await h.send('third opt-out prompt', { text: 'reply three' });
     await h.rtl.waitFor(() => {
       expect(h.view!.getByText("Don't ask again")).toBeTruthy();
     }, { timeout: 15000 });
@@ -94,7 +94,7 @@ describe('happy — support-share sheet dismisses after rating and does not re-n
     // a later generation stays quiet, which is the exact behavior this action promises.
     const { resetSharePromptSession } = require('../../../src/utils/sharePrompt');
     resetSharePromptSession();
-    await h.send('new session prompt', { text: 'reply three' });
+    for (let i = 1; i <= 3; i++) await h.send(`new session prompt ${i}`, { text: `reply ${i}` });
     await h.settle(1700);
     expect(h.view!.queryByText(SHEET_TITLE)).toBeNull();
   }, 60000);

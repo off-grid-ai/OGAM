@@ -70,8 +70,13 @@ it('Delete asks first, then removes the clip; + opens a chat', async () => {
   await view.findByText('Describe a video in a chat to make your first one.', {}, { timeout: 10_000 });
   expect(view.queryByText(CLIP)).toBeNull();
 
+  // New video opens a chat that is already making clips: the composer asks for a video, and the empty
+  // chat offers scenes to try.
   rtl.fireEvent.press(view.getByTestId('library-new'));
   await view.findByTestId('chat-input', {}, { timeout: 10_000 });
+  await rtl.waitFor(() => expect(view.getByPlaceholderText('Describe a video')).toBeTruthy());
+  expect(view.getByTestId('empty-chat-video')).toBeTruthy();
+  expect(view.getByRole('button', { name: 'A fox walking through fresh snow' })).toBeTruthy();
 }, 60_000);
 
 it('the viewer pauses on a tap and saves the clip to Downloads', async () => {

@@ -49,6 +49,9 @@ beforeEach(() => {
   const outside = Object.fromEntries(Object.entries(process.env).filter(([key]) => !/^GIT_/.test(key)));
   env = { ...outside, PATH: `${bin}:${process.env.PATH}`, RELEASE_BRANCH: '', SLACK_WEBHOOK_URL: '', TESTFLIGHT_EXTERNAL_GROUPS: 'Fixture testers', GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: '/dev/null' };
   // No credentials or real uploads: these executables are the build/store/network boundary.
+  // A Ruby new enough for fastlane (scripts/lib/ruby-path.sh), so the stub bundle below stays first on PATH
+  // whatever Ruby this machine has.
+  writeFileSync(join(bin, 'ruby'), '#!/bin/sh\nexit 0\n', { mode: 0o755 });
   writeFileSync(join(bin, 'bundle'), '#!/bin/sh\nif [ "$4" = build ]; then mkdir -p build; echo ipa > build/OffgridMobile.ipa; fi\n', { mode: 0o755 });
   writeFileSync(join(bin, 'gh'), `#!/bin/sh\nif [ "$2" = download ]; then exit 1; fi\necho "$*" >> "${join(root, 'gh-calls.log')}"\nexit 0\n`, { mode: 0o755 });
   writeFileSync(join(bin, 'xcodebuild'), '#!/bin/sh\nexit 0\n', { mode: 0o755 });
@@ -58,7 +61,7 @@ beforeEach(() => {
   mkdirSync(join(mobile, 'scripts/lib'), { recursive: true });
   mkdirSync(join(mobile, 'fastlane'));
   mkdirSync(join(mobile, 'ios/OffgridMobile.xcodeproj'), { recursive: true });
-  for (const name of ['promote.sh', 'uat.sh', 'notify-slack-release.mjs', 'lib/version.js']) {
+  for (const name of ['promote.sh', 'uat.sh', 'notify-slack-release.mjs', 'lib/version.js', 'lib/ruby-path.sh']) {
     cpSync(join(source, 'scripts', name), join(mobile, 'scripts', name));
   }
   writeFileSync(join(mobile, 'fastlane/Fastfile'), '# Native build boundary\n');

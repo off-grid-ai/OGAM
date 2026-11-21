@@ -1,0 +1,1888 @@
+OpenAI Codex v0.169.0
+--------
+workdir: /Users/user/wednesday/off-grid-ai/mobile/docs/review/onboarding-concepts/extension/concepts
+model: gpt-6.1-sol
+provider: openai
+approval: never
+sandbox: workspace-write [workdir, /tmp, $TMPDIR]
+reasoning effort: high
+reasoning summaries: none
+session id: 01a1f289-6313-71f1-af8a-aa630f339ede
+--------
+user
+STYLE (match the attached reference screenshots of the real Off Grid AI desktop onboarding exactly; they are the design source):
+- Dark theme. Near-black background with a faint fine dot lattice and one soft, diffuse emerald glow near the top. As in the references.
+- Geist sans: titles light and large; body regular. Geist Mono for small uppercase muted labels (like "OFF GRID AI · SETUP").
+- Tiles, rows and cards are translucent dark glass with hairline borders and rounded corners, as in the references. A picked tile has an emerald hairline edge and a small emerald check dot at its top right.
+- One accent colour: emerald (#34D399), used only for picked states, the one primary button, the active progress segment and small icons where the references use it. Everything else neutral greys. Small "PRO" labels are muted grey mono text, never coloured.
+- Footer as in the references: a thin bottom bar with a muted line on the left, a short segmented progress line in the centre with a tiny mono step name under it, and the buttons on the right (quiet text buttons, then the emerald primary button).
+- Thin line icons (Phosphor style). No emojis, no colour-coded badges, no traffic lights, no 3D, no illustrations, no browser window chrome, no device frame.
+- Flat screenshot filling the whole canvas edge to edge.
+- Every quoted string must appear exactly as written, legible and not clipped. Add no other copy, no watermark.
+OUTPUT: use your built-in image generation. Save the image in the current directory with the file name given below. Then save the exact final prompt you used to prompts/<same name>.txt. Check the text in the image against the quoted strings; regenerate once if any string is wrong.
+File name: e3b-get-app.png. Landscape, exactly 1536 x 1024. References: refs/desktop-setup.jpg and refs/desktop-groups.jpg for style.
+Screen: the extension's welcome page, step 3 of 5, when Off Grid AI is not found on this computer. Centred column.
+Mono label "OFF GRID AI · IN YOUR BROWSER". Title "Get Off Grid AI for your computer". Muted line "Your picks run on your computer, so chats and pages never leave it. It takes about two minutes."
+A glass card with a computer line icon, text "Off Grid AI for Mac, Windows and Linux", the emerald primary button "Get Off Grid AI", and beside it a quiet outline button "I have it, look again".
+Below the card, small muted text "Using another computer on your network? Set its address" where "Set its address" is a quiet link.
+Footer: 5-segment progress, segment 3 active, mono step name "CONNECT". Right: text button "Back".
+
+hook: UserPromptSubmit
+hook: UserPromptSubmit Completed
+codex
+I will use the image generation skill and the two reference images. I will save the image and the exact prompt, then check the image text.
+exec
+/bin/zsh -lc "pwd && rg --files -g 'rules.md' -g 'ENGINEERING_CONTRACT.md' -g 'desktop-setup.jpg' -g 'desktop-groups.jpg' -g 'AGENTS.md' -g '"'!node_modules'"' -g '"'!generated'"' . && cat /Users/user/.codex/skills/.system/imagegen/SKILL.md && cat /Users/user/.codex/skills/offgrid-ui/SKILL.md" in /Users/user/wednesday/off-grid-ai/mobile/docs/review/onboarding-concepts/extension/concepts
+ succeeded in 70ms:
+/Users/user/wednesday/off-grid-ai/mobile/docs/review/onboarding-concepts/extension/concepts
+./refs/desktop-setup.jpg
+./refs/desktop-groups.jpg
+---
+name: "imagegen"
+description: "Generate or edit raster images when the task benefits from AI-created bitmap visuals such as photos, illustrations, textures, sprites, mockups, or transparent-background cutouts. Use when Codex should create a brand-new image, transform an existing image, or derive visual variants from references, and the output should be a bitmap asset rather than repo-native code or vector. Do not use when the task is better handled by editing existing SVG/vector/code-native assets, extending an established icon or logo system, or building the visual directly in HTML/CSS/canvas."
+---
+
+# Image Generation Skill
+
+Generates or edits images for the current project (for example website assets, game assets, UI mockups, product mockups, wireframes, logo design, photorealistic images, or infographics).
+
+## Top-level modes and rules
+
+This skill has exactly two top-level modes:
+
+- **Default built-in tool mode (preferred):** built-in `image_gen` tool for image generation, editing, and transparent-image requests. Does not require `OPENAI_API_KEY`.
+- **Fallback CLI mode:** `scripts/image_gen.py` CLI. Use when the user explicitly asks for or confirms the CLI/API/model path. Requires `OPENAI_API_KEY`.
+
+Within CLI fallback, the CLI exposes three subcommands:
+
+- `generate`
+- `edit`
+- `generate-batch`
+
+Rules:
+- Use the built-in `image_gen` tool by default for normal image generation and editing requests.
+- Do not switch to CLI fallback for ordinary quality, size, or file-path control.
+- For transparent images, ask built-in `image_gen` for a transparent background and preserve the generated alpha.
+- Never silently switch from built-in `image_gen` or CLI `gpt-image-2` to CLI `gpt-image-1.5`; ask the user first unless they explicitly requested `gpt-image-1.5`.
+- The word `batch` by itself does not mean CLI fallback. If the user asks for many assets or says to batch-generate assets without explicitly asking for CLI/API/model controls, stay on the built-in path and issue one built-in call per requested asset or variant.
+- If the built-in tool fails or is unavailable, tell the user the CLI fallback exists and that it requires `OPENAI_API_KEY`. Proceed only if the user explicitly asks for that fallback.
+- If the user explicitly asks for CLI mode, use the bundled `scripts/image_gen.py` workflow. Do not create one-off SDK runners.
+- Never modify `scripts/image_gen.py`. If something is missing, ask the user before doing anything else.
+
+Built-in save-path policy:
+- In built-in tool mode, Codex saves generated images under `$CODEX_HOME/*` by default.
+- Do not describe or rely on OS temp as the default built-in destination.
+- Do not describe or rely on a destination-path argument (if any) on the built-in `image_gen` tool. If a specific location is needed, generate first and then move or copy the selected output from `$CODEX_HOME/generated_images/...`.
+- Save-path precedence in built-in mode:
+  1. If the user names a destination, move or copy the selected output there.
+  2. If the image is meant for the current project, move or copy the final selected image into the workspace before finishing.
+  3. If the image is only for preview or brainstorming, render it inline; the underlying file can remain at the default `$CODEX_HOME/*` path.
+- Never leave a project-referenced asset only at the default `$CODEX_HOME/*` path.
+- Do not overwrite an existing asset unless the user explicitly asked for replacement; otherwise create a sibling versioned filename such as `hero-v2.png` or `item-icon-edited.png`.
+
+Shared prompt guidance for both modes lives in `references/prompting.md` and `references/sample-prompts.md`.
+
+Fallback-only docs/resources for CLI mode:
+- `references/cli.md`
+- `references/image-api.md`
+- `references/codex-network.md`
+- `scripts/image_gen.py`
+
+## When to use
+- Generate a new image (concept art, product shot, cover, website hero)
+- Generate a new image using one or more reference images for style, composition, or mood
+- Edit an existing image (inpainting, lighting or weather transformations, background replacement, object removal, compositing, transparent background)
+- Produce many assets or variants for one task
+
+## When not to use
+- Extending or matching an existing SVG/vector icon set, logo system, or illustration library inside the repo
+- Creating simple shapes, diagrams, wireframes, or icons that are better produced directly in SVG, HTML/CSS, or canvas
+- Making a small project-local asset edit when the source file already exists in an editable native format
+- Any task where the user clearly wants deterministic code-native output instead of a generated bitmap
+
+## Decision tree
+
+Think about two separate questions:
+
+1. **Intent:** is this a new image or an edit of an existing image?
+2. **Execution strategy:** is this one asset or many assets/variants?
+
+Intent:
+- If the user wants to modify an existing image while preserving parts of it, treat the request as **edit**.
+- If the user provides images only as references for style, composition, mood, or subject guidance, treat the request as **generate**.
+- If the user provides no images, treat the request as **generate**.
+
+Built-in edit semantics:
+- Built-in edit mode is for images already visible in the conversation context, such as attached images or images generated earlier in the thread.
+- If the user wants to edit a local image file with the built-in tool, first load it with built-in `view_image` tool so the image is visible in the conversation context, then proceed with the built-in edit flow.
+- Do not promise arbitrary filesystem-path editing through the built-in tool.
+- If a local file still needs direct file-path control, masks, or other explicit CLI-only parameters, use the explicit CLI fallback only when the user asks for it.
+- For edits, preserve invariants aggressively and save non-destructively by default.
+
+Execution strategy:
+- In the built-in default path, produce many assets or variants by issuing one `image_gen` call per requested asset or variant.
+- In the CLI fallback path, use the CLI `generate-batch` subcommand only when the user explicitly chose CLI mode and needs many prompts/assets.
+- For many distinct assets, do not use `n` as a substitute for separate prompts. `n` is for variants of one prompt; distinct assets need distinct built-in calls or distinct CLI `generate-batch` jobs.
+
+Assume the user wants a new image unless they clearly ask to change an existing one.
+
+## Workflow
+1. Decide the top-level mode: built-in by default, including transparent-output requests; fallback CLI only if explicitly requested or confirmed.
+2. Decide the intent: `generate` or `edit`.
+3. Decide whether the output is preview-only or meant to be consumed by the current project.
+4. Decide the execution strategy: single asset vs repeated built-in calls vs CLI `generate-batch`.
+5. Collect inputs up front: prompt(s), exact text (verbatim), constraints/avoid list, and any input images.
+6. For every input image, label its role explicitly:
+   - reference image
+   - edit target
+   - supporting insert/style/compositing input
+7. If the edit target is only on the local filesystem and you are staying on the built-in path, inspect it with `view_image` first so the image is available in conversation context.
+8. If the user asked for a photo, illustration, sprite, product image, banner, or other explicitly raster-style asset, use `image_gen` rather than substituting SVG/HTML/CSS placeholders. If the request is for an icon, logo, or UI graphic that should match existing repo-native SVG/vector/code assets, prefer editing those directly instead.
+9. Augment the prompt based on specificity:
+   - If the user's prompt is already specific and detailed, normalize it into a clear spec without adding creative requirements.
+   - If the user's prompt is generic, add tasteful augmentation only when it materially improves output quality.
+10. Use the built-in `image_gen` tool by default.
+11. For transparent-output requests, ask built-in `image_gen` for a transparent background and preserve the generated alpha channel.
+12. Inspect outputs and validate: subject, style, composition, text accuracy, and invariants/avoid items.
+13. Iterate with a single targeted change, then re-check.
+14. For preview-only work, render the image inline; the underlying file may remain at the default `$CODEX_HOME/generated_images/...` path.
+15. For project-bound work, move or copy the selected artifact into the workspace and update any consuming code or references. Never leave a project-referenced asset only at the default `$CODEX_HOME/generated_images/...` path.
+16. For batches or multi-asset requests, persist every requested deliverable final in the workspace unless the user explicitly asked to keep outputs preview-only. Discarded variants do not need to be kept unless requested.
+17. If the user explicitly chooses or confirms the CLI fallback, then use the fallback-only docs for model, quality, size, `input_fidelity`, masks, output format, output paths, and network setup.
+18. Always report the final saved path(s) for any workspace-bound asset(s), plus the final prompt or prompt set and whether the built-in tool or fallback CLI mode was used.
+
+## Transparent image requests
+
+Ask built-in `image_gen` for a genuinely transparent background and preserve its alpha.
+
+## Prompt augmentation
+
+Reformat user prompts into a structured, production-oriented spec. Make the user's goal clearer and more actionable, but do not blindly add detail.
+
+Treat this as prompt-shaping guidance, not a closed schema. Use only the lines that help, and add a short extra labeled line when it materially improves clarity.
+
+### Specificity policy
+
+Use the user's prompt specificity to decide how much augmentation is appropriate:
+
+- If the prompt is already specific and detailed, preserve that specificity and only normalize/structure it.
+- If the prompt is generic, you may add tasteful augmentation when it will materially improve the result.
+
+Allowed augmentations:
+- composition or framing hints
+- polish level or intended-use hints
+- practical layout guidance
+- reasonable scene concreteness that supports the stated request
+
+Not allowed augmentations:
+- extra characters or objects that are not implied by the request
+- brand names, slogans, palettes, or narrative beats that are not implied
+- arbitrary side-specific placement unless the surrounding layout supports it
+
+## Use-case taxonomy (exact slugs)
+
+Classify each request into one of these buckets and keep the slug consistent across prompts and references.
+
+Generate:
+- photorealistic-natural — candid/editorial lifestyle scenes with real texture and natural lighting.
+- product-mockup — product/packaging shots, catalog imagery, merch concepts.
+- ui-mockup — app/web interface mockups and wireframes; specify the desired fidelity.
+- infographic-diagram — diagrams/infographics with structured layout and text.
+- scientific-educational — classroom explainers, scientific diagrams, and learning visuals with required labels and accuracy constraints.
+- ads-marketing — campaign concepts and ad creatives with audience, brand position, scene, and exact tagline/copy.
+- productivity-visual — slide, chart, workflow, and data-heavy business visuals.
+- logo-brand — logo/mark exploration, vector-friendly.
+- illustration-story — comics, children’s book art, narrative scenes.
+- stylized-concept — style-driven concept art, 3D/stylized renders.
+- historical-scene — period-accurate/world-knowledge scenes.
+
+Edit:
+- text-localization — translate/replace in-image text, preserve layout.
+- identity-preserve — try-on, person-in-scene; lock face/body/pose.
+- precise-object-edit — remove/replace a specific element (including interior swaps).
+- lighting-weather — time-of-day/season/atmosphere changes only.
+- background-extraction — transparent background / clean cutout. Ask built-in `image_gen` for actual transparency.
+- style-transfer — apply reference style while changing subject/scene.
+- compositing — multi-image insert/merge with matched lighting/perspective.
+- sketch-to-render — drawing/line art to photoreal render.
+
+## Shared prompt schema
+
+Use the following labeled spec as shared prompt scaffolding for both top-level modes:
+
+```text
+Use case: <taxonomy slug>
+Asset type: <where the asset will be used>
+Primary request: <user's main prompt>
+Input images: <Image 1: role; Image 2: role> (optional)
+Scene/backdrop: <environment>
+Subject: <main subject>
+Style/medium: <photo/illustration/3D/etc>
+Composition/framing: <wide/close/top-down; placement>
+Lighting/mood: <lighting + mood>
+Color palette: <palette notes>
+Materials/textures: <surface details>
+Text (verbatim): "<exact text>"
+Constraints: <must keep/must avoid>
+Avoid: <negative constraints>
+```
+
+Notes:
+- `Asset type` and `Input images` are prompt scaffolding, not dedicated CLI flags.
+- `Scene/backdrop` refers to the visual setting. It is not the same as the fallback CLI `background` parameter, which controls output transparency behavior.
+- Fallback-only execution notes such as `Quality:`, `Input fidelity:`, masks, output format, and output paths belong in the CLI path only. Do not treat them as built-in `image_gen` tool arguments.
+
+Augmentation rules:
+- Keep it short.
+- Add only the details needed to improve the prompt materially.
+- For edits, explicitly list invariants (`change only X; keep Y unchanged`).
+- If any critical detail is missing and blocks success, ask a question; otherwise proceed.
+
+## Examples
+
+### Generation example (hero image)
+```text
+Use case: product-mockup
+Asset type: landing page hero
+Primary request: a minimal hero image of a ceramic coffee mug
+Style/medium: clean product photography
+Composition/framing: wide composition with usable negative space for page copy if needed
+Lighting/mood: soft studio lighting
+Constraints: no logos, no text, no watermark
+```
+
+### Edit example (invariants)
+```text
+Use case: precise-object-edit
+Asset type: product photo background replacement
+Primary request: replace only the background with a warm sunset gradient
+Constraints: change only the background; keep the product and its edges unchanged; no text; no watermark
+```
+
+## Prompting best practices
+- Structure prompt as scene/backdrop -> subject -> details -> constraints.
+- Include intended use (ad, UI mock, infographic) to set the mode and polish level.
+- Use camera/composition language for photorealism.
+- Only use SVG/vector stand-ins when the user explicitly asked for vector output or a non-image placeholder.
+- Quote exact text and specify typography + placement.
+- For tricky words, spell them letter-by-letter and require verbatim rendering.
+- For multi-image inputs, reference images by index and describe how they should be used.
+- For edits, repeat invariants every iteration to reduce drift.
+- Iterate with single-change follow-ups.
+- If the prompt is generic, add only the extra detail that will materially help.
+- If the prompt is already detailed, normalize it instead of expanding it.
+- For CLI fallback only, see `references/cli.md` and `references/image-api.md` for model, `quality`, `input_fidelity`, masks, output format, and output-path guidance.
+- For transparent images, ask built-in `image_gen` for actual transparency and preserve its alpha.
+
+More principles shared by both modes: `references/prompting.md`.
+Copy/paste specs shared by both modes: `references/sample-prompts.md`.
+
+## Guidance by asset type
+Asset-type templates (website assets, game assets, wireframes, logo) are consolidated in `references/sample-prompts.md`.
+
+## gpt-image-2 guidance for CLI fallback
+
+The fallback CLI defaults to `gpt-image-2`.
+
+- Use `gpt-image-2` for new CLI/API workflows unless the user confirms a different model.
+- CLI `gpt-image-2` does not support `background=transparent`; ask before using `gpt-image-1.5` unless the user explicitly requested that model.
+- `gpt-image-2` always uses high fidelity for image inputs; do not set `input_fidelity` with this model.
+- `gpt-image-2` supports `quality` values `low`, `medium`, `high`, and `auto`.
+- Use `quality low` for fast drafts, thumbnails, and quick iterations. Use `medium`, `high`, or `auto` for final assets, dense text, diagrams, identity-sensitive edits, or high-resolution outputs.
+- Square images are typically fastest to generate. Use `1024x1024` for fast square drafts.
+- If the user asks for 4K-style output, use `3840x2160` for landscape or `2160x3840` for portrait.
+- `gpt-image-2` size may be `auto` or `WIDTHxHEIGHT` if all constraints hold: max edge `<= 3840px`, both edges multiples of `16px`, long-to-short ratio `<= 3:1`, total pixels between `655,360` and `8,294,400`.
+
+Popular `gpt-image-2` sizes:
+- `1024x1024` square
+- `1536x1024` landscape
+- `1024x1536` portrait
+- `2048x2048` 2K square
+- `2048x1152` 2K landscape
+- `3840x2160` 4K landscape
+- `2160x3840` 4K portrait
+- `auto`
+
+## Fallback CLI mode only
+
+### Temp and output conventions
+These conventions apply only to the CLI fallback. They do not describe built-in `image_gen` output behavior.
+- Use `tmp/imagegen/` for intermediate files (for example JSONL batches); delete them when done.
+- Write final artifacts under `output/imagegen/`.
+- Use `--out` or `--out-dir` to control output paths; keep filenames stable and descriptive.
+
+### Dependencies
+Prefer `uv` for dependency management in this repo.
+
+Required Python package:
+```bash
+uv pip install openai
+```
+
+Optional for image inspection and downscaling:
+```bash
+uv pip install pillow
+```
+
+Portability note:
+- If you are using the installed skill outside this repo, install dependencies into that environment with its package manager.
+- In uv-managed environments, `uv pip install ...` remains the preferred path.
+
+### Environment
+- `OPENAI_API_KEY` must be set for live API calls.
+- Do not ask the user for `OPENAI_API_KEY` when using the built-in `image_gen` tool.
+- Never ask the user to paste the full key in chat. Ask them to set it locally and confirm when ready.
+
+If the key is missing, give the user these steps:
+1. Create an API key in the OpenAI platform UI: https://platform.openai.com/api-keys
+2. Set `OPENAI_API_KEY` as an environment variable in their system.
+3. Offer to guide them through setting the environment variable for their OS/shell if needed.
+
+If installation is not possible in this environment, tell the user which dependency is missing and how to install it into their active environment.
+
+### Script-mode notes
+- CLI commands + examples: `references/cli.md`
+- API parameter quick reference: `references/image-api.md`
+- Network approvals / sandbox settings for CLI mode: `references/codex-network.md`
+
+## Reference map
+- `references/prompting.md`: shared prompting principles for both modes.
+- `references/sample-prompts.md`: shared copy/paste prompt recipes for both modes.
+- `references/cli.md`: fallback-only CLI usage via `scripts/image_gen.py`.
+- `references/image-api.md`: fallback-only API/CLI parameter reference.
+- `references/codex-network.md`: fallback-only network/sandbox troubleshooting for CLI mode.
+- `scripts/image_gen.py`: fallback-only CLI implementation. Use only when the user explicitly chooses or confirms CLI mode.
+---
+name: offgrid-ui
+description: Select, design, implement, or review UI for Off Grid products using the canonical sibling brand guidance and `wednesday-solutions/component-library-animations`. Use for any UI/UX, IA, layout, navigation, interaction, loading, empty/error state, visual styling, or frontend component change. Enforce reuse or extension of a library primitive instead of inventing a standalone local component.
+---
+
+# Off Grid UI
+
+Build each UI change from the shared visual system. Treat brand guidance and the component library
+as source code dependencies, not inspiration.
+
+## Resolve the sources
+
+1. Resolve the product repository root and read its `AGENTS.md` completely.
+2. Resolve the sibling `brand` repository. Read `DESIGN_PHILOSOPHY.md` completely for every UI
+   task. Read `README.md` and `brand_tone_voice.md` when changing visible copy; read the other copy
+   guides only when the task needs them.
+3. Resolve the checkout whose `origin` is
+   `https://github.com/wednesday-solutions/component-library-animations.git`. Prefer the current
+   sibling checkout; otherwise use `/Users/user/wednesday/component-library-animations`. Fetch
+   `origin` before selection when network access is allowed, and record the inspected commit.
+4. Run `node scripts/inventory-ui-sources.mjs --product <repo-root> --summary` from this skill
+   directory. Narrow with `--family <name>` or `--behavior <term>` before opening relevant source;
+   use `--output <path>` only when a durable full inventory is needed.
+
+Stop and report the missing source if either the brand canon or component library cannot be read.
+Do not silently replace them with remembered conventions.
+
+## Select before implementing
+
+1. Name the user job, host surface, interaction state, data density, and the existing local owner.
+2. Search the complete inventory by behavior, not only by the requested visual name. Inspect the
+   source of every plausible primitive, including its dependency, keyboard, focus, ARIA, responsive,
+   animation, and `prefers-reduced-motion` behavior.
+3. Shortlist the best two to four candidates. Score them against:
+   - functional fit and complete state coverage;
+   - quiet, dense, brutalist/terminal composition;
+   - Menlo typography, Off Grid tokens, and emerald-only accent;
+   - accessibility and reduced motion;
+   - Next.js/client-boundary and bundle cost;
+   - maintainability and removal of the superseded local primitive.
+4. Reject decorative landing-page effects for operator-console surfaces: gradients, 3D treatments,
+   ornamental motion, heavy shadows, color-coded meaning, and empty spectacle conflict with the
+   brand even when the library contains them.
+5. Record the selected primitive and why it beats the alternatives before editing.
+
+## Reuse or extend
+
+- The current `component-library-animations` main branch may still be a Vite catalogue of hard-coded
+  previews rather than a consumable package. Treat catalogue entries as concepts until their source
+  exposes real props, tests, accessibility, reduced motion, correct dependencies, and a Next-safe
+  package export. Never weaken an existing product implementation by importing a preview.
+- Import the selected primitive through a stable package/export boundary. Do not paste or fork its
+  source into the product repository.
+- If the library is not consumable as a package, first add the required export/build boundary to the
+  library, then consume it as a dependency.
+- This restriction applies to reusable visual and interaction primitives. Product/domain components
+  still own business data, routes, actions, and feature composition, but must compose their visual
+  controls from the library.
+- A product-specific wrapper is allowed only as a thin semantic adapter over a named library
+  primitive. It may supply product data, tokens, labels, or composition; it must not recreate the
+  primitive's visuals or interaction state.
+- If no primitive can be adapted, add the reusable primitive to the component library first, with
+  its tests and catalogue entry, then consume it. A standalone custom product component is not an
+  acceptable fallback.
+- Use `@offgrid/design` tokens. Do not hardcode brand colors, spacing, typography, or motion values.
+- Finish the migration: replace usages, remove the superseded local implementation, and remove dead
+  styles/exports. One visual behavior has one owner.
+
+## Verify the whole state space
+
+Apply the repository's hygiene and test standards. At minimum verify:
+
+- unit behavior for the shared primitive or adapter;
+- real integration/navigation behavior in the host product;
+- keyboard order, focus visibility, ARIA semantics, contrast, and reduced motion;
+- loading, empty, error, populated, disabled, hover/focus, and destructive states that apply;
+- light and dark themes at narrow and wide target viewports;
+- no clipping, horizontal page overflow, duplicate controls, or wasted desktop real estate;
+- typecheck, tests, coverage, production build, dependency and duplication gates;
+- rendered screenshots after fonts, data, and animation settle.
+
+End with evidence: brand constraints applied, library commit, candidates considered, selected
+primitive, extension seam if any, local component removed, gates run, and live verification state.
+
+exec
+/bin/zsh -lc 'git rev-parse --show-toplevel; ls -la; for p in rules.md ../.codex/ENGINEERING_CONTRACT.md /Users/user/wednesday/off-grid-ai/mobile/rules.md /Users/user/wednesday/off-grid-ai/.codex/ENGINEERING_CONTRACT.md /Users/user/wednesday/brand/DESIGN_PHILOSOPHY.md /Users/user/wednesday/off-grid-ai/brand/DESIGN_PHILOSOPHY.md; do if [ -f "$p" ]; then printf '"'\\n%s\\n' \""'$p"; cat "$p"; fi; done' in /Users/user/wednesday/off-grid-ai/mobile/docs/review/onboarding-concepts/extension/concepts
+ succeeded in 0ms:
+/Users/user/wednesday/off-grid-ai/mobile
+total 0
+drwxr-xr-x   4 user  staff  128 Nov 19 12:09 .
+drwxr-xr-x   6 user  staff  192 Nov 19 12:09 ..
+drwxr-xr-x  24 user  staff  768 Nov 19 12:10 prompts
+drwxr-xr-x   8 user  staff  256 Nov 19 12:09 refs
+
+/Users/user/wednesday/off-grid-ai/mobile/rules.md
+# Off Grid Mobile
+
+Follow [the workspace engineering contract](../.codex/ENGINEERING_CONTRACT.md). It takes priority over these repo notes. Keep each change in the smallest existing owner.
+
+- Paid feature code belongs in the private `pro/` submodule. Core uses the existing registration seams. Commit Pro changes in its own repo.
+- For UI work, follow `../brand/DESIGN_PHILOSOPHY.md` (the one design philosophy for every Off Grid surface; its Mobile profile owns mobile mechanics) and use `@offgrid/design` tokens. For customer-facing copy, read `docs/brand_tone_voice.md`.
+- Keep capture opt-in with a visible recording indicator. Do not publish private device data.
+- During device checks, do not enter credentials or passcodes. Open private content only when the changed journey requires it.
+- Verify the changed journey on the affected device. For a change that affects both platforms, check iOS and Android before claiming both work.
+- Debug builds use `ai.offgridmobile.dev`. Read the in-app Debug Logs or the dev-only `offgrid-debug.log` in the app container when diagnosing device behavior.
+- If asked to push, use a branch and PR; do not push directly to `main`.
+
+<!-- BEGIN GENERATED: shared/CLAUDE.md#debugging-source-of-truth -->
+> **Generated from `shared/CLAUDE.md` - do not edit this section here.**
+> Run `node scripts/mirror-doctrine.mjs` in `shared/` after changing the canonical copy.
+> `--check` fails the build when a mirror drifts, so these cannot silently disagree.
+
+## Debugging — reason from first principles
+
+Read the observed behavior and the owning code. Use logs or a live reproduction when needed. Fix the reported cause without assuming that every bug needs a new source of truth or abstraction.
+<!-- END GENERATED: shared/CLAUDE.md#debugging-source-of-truth -->
+
+/Users/user/wednesday/off-grid-ai/.codex/ENGINEERING_CONTRACT.md
+- Do not refactor, redesign, reorganize, rename, consolidate, or clean up unrelated code.
+- Prefer additive changes. Preserve existing behavior, architecture, ownership, interfaces, data, and compatibility.
+- Apply SOLID, DRY, SSOT, SRP, and Clean Architecture only to changed code. Never use them to justify refactoring.
+- Ask before introducing new abstractions, state owners, schemas, protocols, persistence, or migrations.
+- Do not create Git worktrees unless the user explicitly requests them.
+- Use the smallest focused verification that fits the change, subject to the rule above. Do not run end-to-end tests unless the user explicitly requests them.
+- For a long-running or large verification, use a synthetic profile that reproduces the same behavior in less time. Keep the relevant file, state, and failure conditions faithful to the real case.
+- Never use mocks, spies, direct state mutation, or implementation-detail assertions.
+- Use contract-faithful fakes only for uncontrollable external boundaries.
+- Report which focused verification was completed and any verification that remains.
+
+/Users/user/wednesday/off-grid-ai/brand/DESIGN_PHILOSOPHY.md
+# Off Grid — Design Philosophy (shared source of truth)
+
+This is the **canonical, cross-platform design philosophy** for Off Grid. Every surface — Off
+Grid Desktop, Off Grid Mobile, the Console, the website, and every landing page — inherits from
+here. When a platform doc and this doc disagree on a shared principle, this doc wins; platform
+docs own only the platform-specific mechanics (component libraries, token accessors, layout
+density) and link back here.
+
+Read this before designing or reviewing any Off Grid surface. It pairs with the copy guides in
+this folder (`README.md`, `brand_tone_voice.md`) — the look and the words carry the same
+disposition: give the user something clean and honest, show the mechanism, never decorate to
+impress.
+
+---
+
+## The disposition
+
+The interface is quiet on purpose. It is private, on-device, and fast — and it should feel that
+way: calm, dense, immediate. Nothing shouts. The product earns trust by being clear and by
+getting out of the way, not by ornament. Restraint and motion do the work that gradients and
+color usually do elsewhere. Let the content — the memory, the AI response, the captured moment —
+be the thing that shines.
+
+**Silence, clarity, and function over form.**
+
+---
+
+## Shared principles (binding on every platform)
+
+### 1. Minimal, functional, alive
+Minimal and functional. Every element earns its place; remove before adding. Quiet does not mean
+flat: the surface responds to the person using it, through the shared `@offgrid/ui` alive layer
+(pointer light, press waves, staggered entrances, a living background). No decorative tiles, no
+3D effects, no emojis in the UI, no gradients beyond the brand's emerald light.
+
+### 2. Type: a lean sans, with mono for detail
+- **Geist** (sans) for reading text, controls and titles.
+- **Geist Mono** for small uppercase labels, indices, numbers, timestamps, keys and code.
+
+These two families only. Weights stay light to regular (300–500). Titles are large, light and
+slightly tightened. Hierarchy comes from size, weight, tone and spacing, not from colour. The
+fonts are the pinned `@fontsource-variable/geist` and `@fontsource-variable/geist-mono` packages.
+
+### 3. Accent: emerald, and only emerald
+- Dark mode: `#34D399`
+- Light mode: `#059669`
+
+The single accent color. Used sparingly — active states, focus, the one important action on a
+screen. Everything else is a monochrome hierarchy. Do not introduce a second accent; do not
+color-code information (use position, size, and weight instead). Semantic colors (error/red)
+exist only for their exact purpose.
+
+### 4. Base and depth: black / white, neutral grays, layers of light
+Dark mode background is pure-ish black (`#0A0A0A`); light mode is clean white (`#FFFFFF`).
+Build depth with layers of light, not heavy boxes. A living background (a faint dot lattice and a
+slow breathing emerald light) sits behind translucent surfaces with hairline edges and a faint top
+highlight. Popups and dialogs are glass: blurred, lifted, with the page receding behind them.
+Shadows are soft and wide, never hard or dark-edged. Primary actions carry a soft emerald halo.
+High contrast in both themes.
+
+### 5. Tokens, not magic numbers
+All color, spacing, and typography come from **`@offgrid/design`** (and each platform's token
+layer that maps to it). No hardcoded hex, no magic numbers in component styles. Components
+inherit the brand and flip light/dark automatically through the token mapping — never hardcode a
+color that a token already expresses.
+
+### 6. Visual hierarchy through size and weight, not color
+Primary → secondary → tertiary is expressed by typographic scale and spacing. Labels are quiet
+uppercase "whispers" in muted tone; metadata is small and muted. Give content breathing room at
+the top level and tighten within components. Respect information density where it serves scanning.
+
+An icon goes with what it describes. In a row whose lines can wrap or grow (a device with its
+status and errors, a file with its details), an icon that says what the thing is (a phone, a
+computer, a file type) is part of its name: it sits on the name's line, centred on that line,
+and never floats down the middle of the row. An icon that speaks for the whole row (a state, a
+chevron, a toggle, a settings row's icon in a list of fixed-height rows) centres on the row. A
+status dot goes with its word: it sits on that word's first line, never centred on a status that
+wraps. Icons and dots that stack share one column, so the text beside them starts on one edge.
+Before you place an icon, ask which of these it is.
+
+### 7. Motion clarifies, never decorates
+- Animate **only** `transform` and `opacity`. Never layout-thrashing properties.
+- Timings: micro 100–150ms · hover/spring 200–300ms · reveal 300–500ms.
+- Always honor `prefers-reduced-motion`.
+- Stream anything that takes time; never a frozen wall — use skeletons/shimmer/progress.
+- Functional animation only. If it doesn't clarify state or guide attention, cut it.
+
+### 8. Sensible defaults, no needless modes
+Nothing should require configuration before it works. Infer intent; tuck advanced controls away
+until wanted. Accessible by default: `aria-label` on icon buttons, `alt` on images, ≥4.5:1
+contrast, touch targets ≥44px.
+
+### 9. Use the space of the host surface
+Do not make one platform imitate another. Desktop uses its wide canvas for responsive grids,
+master-detail views, tables, and side panels. Mobile uses a focused vertical flow and progressive
+disclosure. In both cases, avoid purposeless empty space and horizontal page overflow.
+
+### 10. Every action answers at once: pressed, working, done
+Every tap, click, key or gesture gets visible feedback within one frame (about 100ms), on the
+thing the person touched. Then:
+- **Pressed:** the control shows it was hit (pressed state, ripple, highlight) immediately.
+- **Working:** if the result is not instant, the control shows it is working (its own spinner,
+  shimmer or progress) until the result lands. The person's choice shows as chosen right away;
+  the app never waits for the work to finish before showing what was picked.
+- **Done:** the result appears, and the control settles in its new state (tick, new value,
+  toast for an effect elsewhere).
+Never a silent gap where nothing seems to happen and then the change jumps in. (Mobile, Nov 2026:
+choosing Group by Project in the Chats view menu showed nothing for about 7 seconds, then the
+tick moved.)
+
+### Anti-patterns (avoid everywhere)
+Colorful gradients or hard, dark shadows · multiple accent colors · thick borders and heavy
+boxes · decorative animation · any type family beyond Geist and Geist Mono · 3D effects ·
+color-coded information · flat dead surfaces with no response · purposeless empty space ·
+cluttered layouts.
+
+---
+
+## Desktop profile
+
+Desktop is a wide, mouse-driven, keyboard-driven, multi-window surface.
+
+- Fill the canvas with responsive multi-column grids, dense tables, master-detail views, and side
+  panels. Do not center a phone-width column on a wide window. Keep controls near their content.
+- Use tight 4/8/12px spacing inside dense groups and clearer separation between groups. Keep
+  headers, filters, tabs, and column labels visible while their body scrolls.
+- Treat hover and keyboard input as first-class states. Reveal secondary actions on hover and
+  provide shortcuts for repeated navigation and submission.
+- Use the shared `SidePanel` for settings, editors, previews, and multi-step details. It must close
+  by Escape, outside click, and its close control. Reserve a centered dialog for a short blocking
+  confirmation.
+- Desktop typography roles are: title 18px; body and subtitle 14px; description 12px; metadata and
+  labels 10–11px. Labels are uppercase, muted, and tracked.
+- In Tailwind, use `font-sans` for text and `font-mono` only for labels, numbers and code,
+  8-12px radius, neutral surface and border tokens, and the emerald token for active, focus, and
+  primary-action states. Use `@phosphor-icons/react` for icons.
+- Interactive controls transition in 100–150ms and use a small pressed scale. Panels and dialogs
+  use opacity plus scale or slide over 120–200ms. Keep exit animation and reduced-motion behavior.
+- Radix dialogs are centered with the CSS `translate` property. Their keyframes may animate only
+  `transform: scale()` and opacity; adding a transform translation causes the dialog to jump.
+
+## Mobile profile
+
+Mobile is a touch-driven, narrow surface. Use a clear vertical flow, compact groups, and progressive
+disclosure. Touch targets are at least 44px.
+
+### Mobile tokens
+
+- Access colors and shadows through `useTheme()` and styles through `useThemedStyles()`.
+- Use `TYPOGRAPHY`, `SPACING`, and `FONTS` from `src/constants`; never hardcode their values in a
+  component.
+- The spacing scale is 4, 8, 12, 16, 24, and 32px (`xs` through `xxl`). Standard screen padding is
+  24px, card padding is 16px, and normal control or list spacing is 8–12px.
+- Surface tokens are `background`, `surface`, and `surfaceLight`. Text tokens are `text`,
+  `textSecondary`, and `textMuted`. Use `borderFocus` for focus and `error` only for errors.
+
+### Mobile typography hierarchy
+
+| Role | Token | Size | Weight | Use |
+| --- | --- | ---: | ---: | --- |
+| Display | `TYPOGRAPHY.display` | 22px | 200 | Large numeric values |
+| Title | `TYPOGRAPHY.h2` | 16px | 400 | One screen title |
+| Body | `TYPOGRAPHY.body` | 14px | 400 | Messages, inputs, buttons, and primary content |
+| Subtitle | `TYPOGRAPHY.h3` | 13px | 400 | Sections, cards, and modal titles |
+| Description | `TYPOGRAPHY.bodySmall` | 13px | 400 | Help and explanatory text |
+| Metadata | `TYPOGRAPHY.meta` / `label` | 9–10px | 300–400 | Timestamps, metrics, and uppercase labels |
+
+`h1` is reserved for rare hero text and is not a normal screen title. Hierarchy comes from size,
+weight, and tone. Metadata must remain quiet.
+
+### Mobile components
+
+- Top-level tabs use the shared `ScreenHeader` with 12px horizontal and 8px vertical padding.
+  Pushed screens use 16px horizontal and 12px vertical padding, a back control, a title, and an
+  optional trailing action. Headers use the surface token, a subtle divider, the theme's `edge`
+  shadow, and a stable stacking level, and their surface runs up under the status bar, so a list
+  scrolls under a real bar. A search field right under the header shares that surface and
+  shadow: on mobile it is always the shared `ListSearchBar` (lint refuses a bare `SearchField`
+  above a list). Any bar that stays put while content scrolls (search, tabs, chips, a count line)
+  is part of that surface. Review it scrolled, with rows under the bar, never only at rest. Onboarding, lock, and model-download screens may use full-screen layouts.
+- Buttons and inputs use an 8px radius, token spacing, and clear focus, pressed, disabled, loading,
+  and error states. Cards use `surface`, a subtle border, and at most a small theme shadow.
+- Use `react-native-vector-icons`; Feather is the default. Do not use emojis as interface icons.
+- Empty states contain one direct message and, when useful, one clear action.
+- Consistent rhythm: rows in one list share one height, and a missing subtitle keeps its line.
+- Say it with less: meta sits on one line, as icons with accessible names, with detail one tap
+  away. One mark per meaning; never two checks on one row.
+- Show what the person acts on (how many, when last used), not internal values or bare dates.
+- One home per setting: other surfaces link to it. Many groups become tabs, not stacked accordions.
+- A live status (connected, checking, failing) may carry a small green, amber or red dot, always
+  beside its word. Colour helps a glance down a list; the word still carries the meaning.
+- Cards and list groups are glass: the living field shows through them. Never trade the glass for
+  an opaque fill to hide the dots; it reads flat. Sheets and inputs may stay solid.
+- What you add shows where it goes: an attached photo or file sits inside the composer, on the
+  same glass, never as a separate white or boxed tile. Remove is a quiet ×, never red.
+- Controls on one surface are one kind: same size, same tint, and only the main action is
+  filled. A placeholder fits on one line.
+
+## Component ownership
+
+Use `@offgrid/design` for tokens and `@offgrid/ui` (`off-grid-ai/ui-library`) for reusable visual
+and interaction primitives, including the alive layer (`AliveProvider`, `LivingField`, `alive.css`).
+Its `docs/direction/DESIGN_PHILOSOPHY.md` carries the same direction in more detail. Search the existing product components before adding anything.
+Extend a shared primitive when the concept is the same; do not fork a local visual copy.
+
+Console, website, and landing pages inherit the shared principles directly.
+
+---
+
+**Remember:** the UI should feel like the product — private, quiet, fast. Let the AI's
+capabilities and the user's content speak, not the interface.
+
+codex
+Both reference files are available. I will match their dark glass surfaces, faint dot pattern, and footer style. The main button will be inside the card, as requested.
+exec
+/bin/zsh -lc 'for p in /Users/user/wednesday/off-grid-ai/mobile/AGENTS.md /Users/user/wednesday/off-grid-ai/brand/README.md /Users/user/wednesday/off-grid-ai/brand/brand_tone_voice.md; do if [ -f "$p" ]; then cat "$p"; fi; done; git -C /Users/user/wednesday/component-library-animations rev-parse HEAD' in /Users/user/wednesday/off-grid-ai/mobile/docs/review/onboarding-concepts/extension/concepts
+ succeeded in 0ms:
+# Mobile instructions
+
+Read [rules.md](./rules.md) and [the workspace engineering contract](../.codex/ENGINEERING_CONTRACT.md).
+# Off Grid — copy references
+
+Canonical references for writing any Off Grid copy (website, app strings, marketing, outreach). Read these before writing.
+
+## The rule that overrides everything
+
+**Write about outcomes, not functionality. Lead with the outcome. Speak directly to the end customer.**
+
+- Say what the customer *gets* (the result in their life/work), not what the feature *does*.
+  - Not: "On-device llama.cpp inference with grammar-constrained output."
+  - Yes: "Your notes, chats, and screen stay on your Mac — nobody else can read them, ever."
+- Open with the outcome/benefit, then support it with the mechanism as proof.
+- Address the reader as "you." Every sentence earns its place by moving them toward a decision (Bly/Ogilvy: copy is salesmanship in print).
+
+## The references
+
+- **`copywriting-rulebook.md`** — the full doctrine (Robert W. Bly *The Copywriter's Handbook* + David Ogilvy *Ogilvy on Advertising*), applied to selling professional services. Positioning, USP, features→benefits, headline discipline, "sell the outcome." The source of truth for *how* to structure persuasive copy.
+- **`brand_tone_voice.md`** — Off Grid brand voice (proof-first, privacy-as-mechanism, no em dashes/curly quotes/exclamation marks, banned words, no AI-slop phrasing). The source of truth for *how it should sound*.
+- **`write-as-mac-SKILL.md`** — the "write as Mac" persona skill (Mohammed Ali Chherawalla): peer-exchange posture, sentence mechanics, anti-AI-slop audit. Use when drafting outreach/posts/emails sent or published as Mac.
+- **`DESIGN_PHILOSOPHY.md`** — the shared, canonical Off Grid **design** philosophy (the look, not the words): minimal and alive, Geist with Geist Mono for detail, emerald accent as the light source, layered depth, tokens in `@offgrid/design`, visual hierarchy and motion. The source of truth for *how it should look*; links out to per-platform specifics (mobile, desktop). Read before designing or reviewing any UI surface.
+
+## How to use
+
+1. Decide the single outcome the reader should feel/get.
+2. Lead with that outcome, in the customer's own language.
+3. Structure per `copywriting-rulebook.md`; voice per `brand_tone_voice.md`; if it's Mac's outreach, per `write-as-mac-SKILL.md`.
+4. Cut any sentence that describes functionality without tying it to an outcome.
+# Off Grid -- Brand Voice & Tone
+
+---
+
+## In One Sentence
+
+Off Grid sounds like someone who built this because they genuinely believe you deserve better -- handing you something for free, no strings, no data harvested, no angle. Here, take this. You're better off with it.
+
+---
+
+## The Core Disposition
+
+Off Grid isn't a product trying to win a market. It's a thing built for the right reasons, handed over to people who deserve it.
+
+The voice carries that. It doesn't sell. It gives. It doesn't ask you to trust it -- it shows you the mechanism and lets you verify. It doesn't talk about privacy as a feature -- it talks about it as something that was taken from you that you can have back.
+
+Think: a friend who spent a year building something in their spare time because they were fed up with the alternative, and now they're just happy to share it. No pitch. No upsell. "Here, this is for you. It does what it says. Go use it."
+
+That's the energy in every word Off Grid writes.
+
+---
+
+## Voice Attributes
+
+### 1. Generous, not transactional
+
+Off Grid asks nothing from you. No account. No API key. No data. The voice reflects this -- it gives without expecting anything back. It doesn't ask you to share, subscribe, follow, or review. It just hands you the thing.
+
+This means copy never implies a trade. No "get access to," no "unlock," no implied paywall. The frame is always: here's what you have.
+
+```
+"Download it. Run it offline. That's it. No account, no API key, nothing we're holding back."
+"Sign up to access the full model library."  [Wrong -- we don't do this]
+```
+
+### 2. Proof-first, not promise-first
+
+Every claim has a fact behind it. Never say "fast" when you can say "15-30 tok/s on flagship devices." Never say "private" when you can say "the model runs in your phone's RAM, inference happens on your CPU and GPU, your prompt is not sent anywhere."
+
+Specificity is how you earn trust without asking for it.
+
+```
+"Phi-3 Mini runs at ~28 tok/s on a Snapdragon 8 Gen 3. Llama 3.1 8B runs at ~12 tok/s on the same chip."
+"On-device. Offline. Your chats and files never leave your phone. Not a marketing claim: airplane mode works."
+```
+
+```
+"Blazing fast AI right on your device."  [Vague, promotional, earns nothing]
+```
+
+### 3. Privacy as a right being returned, not a feature being sold
+
+You've been using AI that logs everything. Your prompts. The time. Your account. Stored indefinitely, used to train models, subject to law enforcement requests. That data is yours and it's been taken.
+
+Off Grid gives it back. The voice names this plainly, without drama. Not "we value your privacy" -- that's what every company that sells your data says. Instead: here's what actually happens when you use this, mechanically, in plain language. You can verify it yourself.
+
+Don't moralize. Don't editorialize. State the fact and let it land.
+
+```
+"When you run a query on ChatGPT, it's logged on a server. Your prompt, the time, your account. With Off Grid, the model runs in your phone's memory. Your prompt is not sent anywhere. Ever."
+```
+
+```
+"In a world where Big Tech is harvesting your data..."  [Preachy -- the user already knows]
+"We take your privacy seriously."  [What every surveillance product says]
+```
+
+### 4. Respect the person reading
+
+The Off Grid user chose this deliberately. They know what an LLM is. They've heard of Ollama. They opted out of the default. Don't explain concepts they already understand. Don't justify privacy as a value -- they already hold it.
+
+Give them exactly what they need to act, nothing more.
+
+```
+"Tap Download. The GGUF lands in app storage. First load takes 5-15 seconds -- the model is being mapped into RAM."
+```
+
+```
+"So what is a GGUF file? Great question! It's a quantized model format that allows..."  [Condescending, they don't need this]
+```
+
+### 5. Specific, not vague
+
+No fuzzy qualifiers. If the answer depends on the device, name the device. If it depends on quantization, name the quantization. "It depends" is only acceptable followed immediately by the variables.
+
+```
+"Llama 3.1 8B Q4_K_M needs ~5.5GB RAM. iPhone 15 Pro has 8GB -- runs fine. iPhone 12 has 4GB -- use Phi-3 Mini instead."
+```
+
+```
+"Performance may vary depending on your device and model choice."  [Useless, tells them nothing]
+```
+
+### 6. No angle, no ask
+
+Off Grid has no ulterior motive and the voice reflects that. No dark patterns, no nudges toward premium, no FOMO. When something is free it's just free. When something doesn't work on a device, say so clearly instead of softening it to protect a conversion.
+
+The reader should always feel like Off Grid is on their side, not managing them.
+
+```
+"Your phone has 4GB RAM. Llama 3.1 8B won't run well on it. Phi-3 Mini or Llama 3.2 3B will."
+"For the best experience, consider upgrading to a device with more RAM."  [Wrong -- just tell them the truth]
+```
+
+---
+
+## The Emotional Arc
+
+Every piece of Off Grid content follows the same arc:
+
+**Recognition -> Return -> Freedom**
+
+1. **Recognition**: Name what's been happening. "Every query you've sent to a cloud AI has been logged, stored, and used."
+2. **Return**: Show what's being given back. "With Off Grid, the model runs on your phone. Your chats never leave it."
+3. **Freedom**: Hand them the capability without condition. "Go offline. It still works. It's yours."
+
+This isn't about doubt and resolution like a pricing tool. It's about something that was taken being handed back. The tone is quiet, clear, and generous -- not triumphant or righteous.
+
+---
+
+## Tone Shifts
+
+The voice stays constant. The tone shifts by context.
+
+### Landing Page / Website
+**Tone: Quiet generosity**
+
+Short sentences. State what it does, then prove it. The reader should feel like they found something real -- not a product launch, a thing that actually works.
+
+```
+"Chat. Generate images. Use tools. See. Listen.
+All on your phone. All offline. Your chats and files never leave your device.
+
+No account. No API key. No subscription. Download and go."
+```
+
+### In-Product / UI Copy
+**Tone: Terminal precision**
+
+Minimal words. Labels are short and uppercase. Explanations appear on demand, never cluttering the primary view. The interface should feel like the answer is already there.
+
+```
+Label: "ACTIVE MODEL"
+Value: "Llama 3.2 3B"
+Detail: "12.4 tok/s -- Q4_K_M -- 2.1GB"
+Status: "READY"
+```
+
+### Guides / Docs
+**Tone: Direct handoff**
+
+The reader has the app open. Get them to the thing. State requirements before steps. One action per step.
+
+```
+"Step 1 -- Download Off Grid
+iOS: requires iPhone 12 or newer, 4GB RAM.
+Android: requires Android 10+, 4GB RAM."
+```
+
+### Onboarding
+**Tone: Here, take this**
+
+First launch. One job: first inference. Don't introduce features -- show one path, make it obvious.
+
+```
+"Pick a model. Download it. Load it. Type something.
+That's all there is."
+```
+
+### Error States / Empty States
+**Tone: Honest and useful**
+
+Say what happened. Say what to do. Never blame the user. Never be vague.
+
+```
+"Not enough free RAM to load this model (~5.5GB needed). Close background apps and try again -- or switch to Phi-3 Mini at 2GB."
+"Error loading model. Please try again."  [Useless]
+
+"No models downloaded yet. Phi-3 Mini is a good start -- 2GB, runs on any modern phone, no account needed."
+"No models found."  [Incomplete]
+```
+
+---
+
+## Language Rules
+
+### Always
+- Use "you/your" -- the user has this, it belongs to them
+- State device requirements before recommending a model
+- Use present tense ("the model runs in RAM") not future ("the model will run")
+- File sizes always with units: 2.1GB, not "2.1"
+- Speeds always with units: 12 tok/s
+
+### Never
+- Exclamation marks in product copy
+- "Unlock," "supercharge," "game-changing," "revolutionary," "next-generation," "cutting-edge"
+- Implying anything is held back or gated
+- Privacy framed as a selling point -- frame it as a mechanism or a right
+- Em dashes or double hyphens -- single hyphens only
+- Curly quotes or special unicode characters
+- "Genuinely," "honestly," "straightforward"
+- Only use characters available on a standard keyboard
+
+### How we talk about analytics
+
+Don't. Marketing copy never mentions analytics, telemetry or tracking, not even to say it is opt-in. The privacy policy and the app's Settings > Analytics cover it.
+
+- The promise: "Your chats and files never leave your device." Or: "We never see your prompts, replies or files."
+- Inside the apps, the term is "anonymous stats": counts of what was used and how fast models ran. Never "usage data", which sounds like we see what you do.
+- Never write "no telemetry," "no analytics," "zero data," "nothing leaves your device," or "never phones home." Name what the claim covers: your chats, your files, your prompts.
+
+### How we talk about AI video
+
+Video Studio is part of Off Grid AI Pro. Say where the work happens. Marketing copy and images don't mention an AI label.
+
+- Consent: show only people who agreed to it. Never suggest a use that fakes a real person, deceives, or shows a minor.
+- Local: "Your character photos never leave your devices." Name the three ways it runs: on your phone, on your computer, or your phone using your own computer.
+- Never write "undetectable," "indistinguishable from real," "anyone you want," or "deepfake" as a benefit.
+
+### Never (AI slop - flags as machine-generated)
+Single words to cut on sight:
+- "delve" / "delves into"
+- "crucial" / "pivotal" / "vital"
+- "meticulous" / "intricate"
+- "tapestry" / "testament" / "landscape"
+- "underscore" / "underscores"
+- "bolstered" / "garnered"
+- "enduring" / "vibrant" / "rich" (as vague intensifiers)
+- "align with" / "resonate with"
+- "foster" / "cultivate"
+- "showcase" / "highlight" (as verbs in prose)
+- "enhance" / "enhancing"
+- "leverage" (use "use")
+- "robust" (use a specific number instead)
+- "comprehensive" (say what it actually covers)
+- "valuable insights" (say what the insight is)
+- "dive in" / "let's explore" / "in this guide we'll"
+- "seamlessly"
+- "empower" / "empowers"
+
+Structural habits to kill:
+- Rule of three -- two items or four, never exactly three adjectives in a row
+- "Not just X, but Y" constructions
+- "It's not X, it's Y" constructions
+- Throat-clearing openers ("Great question," "Absolutely," "Certainly")
+- Conclusion summaries that restate what was just said
+- Bolding random phrases mid-paragraph for "emphasis"
+- Every section getting a bold header when prose would do
+- Lists of exactly three bullet points as a default
+
+Phrases that read as AI-generated:
+- "serves as" (say "is")
+- "stands as" (say "is")
+- "represents a" (say "is")
+- "marks a turning point"
+- "is a testament to"
+- "plays a crucial/pivotal/vital role"
+- "it is worth noting that"
+- "it goes without saying"
+- "at the end of the day"
+- "in today's landscape"
+- "in the ever-evolving"
+- "moving forward" / "going forward"
+
+---
+
+## Technical Terminology
+
+Use precise names. Not marketing language.
+
+| Term | How Off Grid uses it |
+|---|---|
+| GGUF | "The model format -- download and load directly" |
+| Quantization | "Q4_K_M is the balance point: smaller file, minimal quality loss" |
+| Tokens per second | "28 tok/s -- the speed you'll feel in conversation" |
+| NPU / Neural Engine | "Hardware-accelerated inference -- faster and cooler than CPU-only" |
+| Core ML | "iOS model format -- needed for NPU acceleration on iPhone" |
+| Ollama / LM Studio | "Run bigger models from your desktop, over LAN" |
+| Q-levels | "Q2_K: smallest, most degraded. Q8_0: near-lossless, largest." |
+
+Name models precisely. Include size and quantization when recommending.
+
+```
+"Llama 3.2 3B Q4_K_M -- ~2GB, 18 tok/s on iPhone 15 Pro"
+"Phi-4 Mini -- runs on any modern phone, 4GB RAM minimum"
+"Stable Diffusion 1.5 -- on-device image gen, 5-10s on Snapdragon NPU"
+```
+
+---
+
+## Content Structure
+
+### The Off Grid Guide Format
+
+**1. One sentence on what this gets you**
+What the user can do when they're done.
+
+**2. Requirements upfront**
+Device, OS version, RAM, storage. Before any steps, not buried at the end.
+
+**3. Numbered steps, one action each**
+Don't combine download + load into one step. One action per line.
+
+**4. What success looks like**
+Tell them exactly what they'll see. "You'll see READY under the model name."
+
+**5. One or two next steps** (optional)
+Not a feature tour -- just the obvious next thing.
+
+### Example Headlines
+
+```
+"Run your first local AI model in 5 minutes"
+"Which model should you use? Here's how to decide."
+"Stable Diffusion on Android -- on-device image generation, no cloud."
+"Llama 3.1 8B vs Phi-4 Mini -- when to use which."
+"How to connect Off Grid to your Ollama server at home."
+"iPhone 15 Pro vs iPhone 12 -- what on-device AI actually looks like."
+```
+
+### Headlines That Would Be Wrong
+
+```
+"Unlock the power of private AI"  [implies something held back]
+"Why Off Grid is the best AI app in 2026"  [no proof, wrong energy]
+"10 reasons to switch from ChatGPT"  [listicle, promotional]
+"The Ultimate Guide to On-Device AI"  [generic filler]
+"AI has never been this private"  [unverifiable]
+```
+
+---
+
+## Microcopy Patterns
+
+### Buttons
+```
+Primary: "Download"
+Secondary: "Load Model"
+Tertiary: "View Details"
+Destructive: "Delete"
+```
+
+### Model States
+```
+Not downloaded: "2.1GB -- tap to download"
+Downloading: "Downloading... 847MB / 2.1GB"
+Downloaded, not loaded: "READY TO LOAD"
+Loaded: "ACTIVE -- 12.4 tok/s"
+Loading: "Loading into RAM..."
+```
+
+### Reassurance Lines
+```
+"No account. No API key. No internet after setup."
+"Works in airplane mode."
+"Nothing you type leaves your phone."
+```
+
+### Empty States
+```
+No models: "Nothing downloaded yet. Phi-3 Mini is 2GB and runs on any modern phone -- good place to start."
+No conversations: "No conversations yet. Load a model and start one."
+No search results: "Nothing matches that filter. Try broadening it."
+```
+
+### Error States
+```
+Insufficient RAM: "Not enough free RAM (~5.5GB needed). Close background apps, or try a smaller model -- Phi-3 Mini runs in 2GB."
+Download failed: "Download interrupted. Check your connection and try again."
+Load failed: "Load failed -- the file may be corrupted. Delete it and re-download."
+```
+
+### Success States
+```
+"ACTIVE -- 12.4 tok/s"
+"Download complete. Tap Load."
+"Generated in 6.2s"
+```
+
+---
+
+## Brand Taglines
+
+Primary: **"Private AI. No cloud. No compromise."**
+
+Alternatives:
+- "Run AI on your phone. Your chats never leave it."
+- "The Swiss Army Knife of On-Device AI."
+- "AI that stays on your device."
+- "No cloud. No account. No compromise."
+- "Yours. Offline. Always."
+
+---
+
+## Quality Checklist
+
+Before publishing any Off Grid content:
+
+- [ ] Does it feel like something being given, not sold?
+- [ ] Are privacy claims stated as mechanisms ("the model runs in RAM"), not promises ("we value your privacy")?
+- [ ] Does every performance claim include a number and a device?
+- [ ] Are device requirements stated before steps?
+- [ ] Does it follow the recognition -> return -> freedom arc?
+- [ ] Is every "it depends" followed immediately by what it depends on?
+- [ ] Can the reader do the thing without googling anything?
+- [ ] Does it sound like someone who built this because they wanted to, not to sell it?
+- [ ] Are there zero exclamation marks in product copy?
+- [ ] Does every sentence pass the "would a human actually write this" test?
+- [ ] Are there zero instances of: delve, crucial, pivotal, tapestry, testament, underscore, bolstered, garnered, meticulous, vibrant, landscape, foster, cultivate, leverage, robust, comprehensive, seamlessly, empower?
+- [ ] Are there zero "not just X but Y" constructions?
+- [ ] Are there zero "serves as" / "stands as" / "represents a" substitutions for "is"?
+- [ ] Does it avoid restating the conclusion at the end?
+- [ ] Is nothing implied to be locked, premium, or held back?
+
+---
+
+*"Here. It's yours. It runs on your phone and nowhere else."*
+dc9c6c512dd477d1585040f4457c3661e2915417
+
+apply patch
+patch: completed
+/Users/user/wednesday/off-grid-ai/mobile/docs/review/onboarding-concepts/extension/concepts/prompts/e3b-get-app.png.txt
+diff --git a/docs/review/onboarding-concepts/extension/concepts/prompts/e3b-get-app.png.txt b/docs/review/onboarding-concepts/extension/concepts/prompts/e3b-get-app.png.txt
+new file mode 100644
+index 0000000000000000000000000000000000000000..fbada0e8c4a1fb0b9b72d90b05479b514a0f5a8a
+--- /dev/null
++++ b/docs/review/onboarding-concepts/extension/concepts/prompts/e3b-get-app.png.txt
+@@ -0,0 +1,25 @@
++Use case: ui-mockup.
++Create one finished, flat screenshot of the Off Grid AI browser extension welcome page, step 3 of 5, when Off Grid AI is not found on this computer.
++OUTPUT: landscape PNG, exactly 1536 x 1024 pixels. The interface fills the entire canvas edge to edge.
++
++REFERENCE INPUTS: Image 1, refs/desktop-setup.jpg, and Image 2, refs/desktop-groups.jpg, are style references only. Match the real Off Grid AI onboarding design in these references exactly: same restrained dark glass, faint dot lattice, fine borders, typography, small icons and footer treatment. Replace the reference page contents with only the text specified below. Do not copy any other reference text.
++
++STYLE: near-black #0A0A0A background, faint fine evenly spaced dot lattice, one soft diffuse emerald glow near the top. Geist sans for all titles, text and buttons; title large and light, body regular. Geist Mono for small uppercase muted labels. Translucent dark glass card, delicate neutral hairline border, rounded corners, very faint top highlight. One accent only: emerald #34D399 on the single primary button and the active third progress segment. All other elements neutral greys. Thin Phosphor-style computer line icon. Quiet, precise, spacious and faithful to the references, without decorative artwork.
++
++LAYOUT: A centred content column about 900 px wide, with generous outer space. Centre-align the heading area. Place the small muted mono label near y=240, the large light title below it, then the muted supporting sentence with comfortable line height. Put the glass card below around y=435, width about 800 px and height about 220 px. In the card, centre the thin computer icon above the card title; below it, arrange two buttons side by side, emerald primary on the left and quiet neutral outline on the right. Below the card, centre the small muted network sentence with its final phrase styled as a quiet neutral link. Keep all text fully visible with generous padding. No selected tiles are needed for this state.
++
++EXACT TEXT, each appearing once, with precise spelling, punctuation, case and spacing:
++Top muted mono label: "OFF GRID AI · IN YOUR BROWSER"
++Large title: "Get Off Grid AI for your computer"
++Muted supporting sentence: "Your picks run on your computer, so chats and pages never leave it. It takes about two minutes."
++Glass card title: "Off Grid AI for Mac, Windows and Linux"
++Emerald primary button: "Get Off Grid AI"
++Quiet outline button beside it: "I have it, look again"
++Small muted sentence below card: "Using another computer on your network? Set its address"
++Within that sentence only, "Set its address" is a quiet link, without repeating the phrase elsewhere.
++Footer centre mono step label: "CONNECT"
++Footer right quiet text button: "Back"
++
++FOOTER: a thin full-width bottom bar about 76 px high, separated by a fine top border, as in desktop-groups.jpg. At left use only a short muted neutral line with no text, because no left-footer copy is supplied. At the exact horizontal centre, show a short progress line of exactly five small separated horizontal segments; the third segment alone is active emerald, the other four are muted neutral grey. Below those segments place the tiny mono label CONNECT. Put the quiet Back text button on the right with comfortable edge padding. The only emerald primary button on the entire page is Get Off Grid AI inside the card.
++
++CONSTRAINTS: Every quoted string must be exact, legible and unclipped. Add no other copy, no watermark, no browser chrome, no device frame, no emojis, no coloured badges, no traffic lights, no 3D, no illustrations, no extra icons or controls. Do not render prompt labels or quotation marks. Preserve the supplied copy exactly.
+
+exec
+/bin/zsh -lc 'ls prompts; ls -lt /Users/user/.codex/generated_images' in /Users/user/wednesday/off-grid-ai/mobile/docs/review/onboarding-concepts/extension/concepts
+ succeeded in 73ms:
+_style.txt
+e1-what.brief
+e1-what.in
+e1-what.log
+e1-what.txt
+e2-which.brief
+e2-which.in
+e2-which.log
+e3-connect.brief
+e3-connect.in
+e3-connect.log
+e3b-get-app.brief
+e3b-get-app.in
+e3b-get-app.log
+e3b-get-app.png.txt
+e4-allow.brief
+e4-allow.in
+e4-allow.log
+e4-allow.png.txt
+e5-how.brief
+e5-how.in
+e5-how.log
+e6-panel.brief
+e6-panel.in
+e6-panel.log
+e6-panel.txt
+total 0
+drwxr-xr-x    3 user  staff    96 Nov 19 08:17 01a1f1b2-0ace-7b41-b54a-e6642a159042
+drwxr-xr-x    3 user  staff    96 Nov 19 08:17 01a1f1b2-0ac3-74b2-b6f5-ac5479121965
+drwxr-xr-x    3 user  staff    96 Nov 19 08:17 01a1f1b2-0abe-7793-a633-2cacef00a0c0
+drwxr-xr-x    3 user  staff    96 Nov 19 08:17 01a1f1b2-0abe-7483-b2b1-417e667ae62c
+drwxr-xr-x    3 user  staff    96 Nov 19 08:17 01a1f1b2-0ad4-78f0-a3df-9c440cc964e4
+drwxr-xr-x    4 user  staff   128 Nov 18 16:11 01a1ee3d-1dc4-72c1-855d-c8fc0629bca5
+drwxr-xr-x    3 user  staff    96 Nov 18 16:10 01a1ee3d-1dc4-7050-aea4-d879f0ddefed
+drwxr-xr-x    3 user  staff    96 Nov 18 16:10 01a1ee3d-1dc4-73e2-84e2-d0e6be3e4009
+drwxr-xr-x    3 user  staff    96 Nov 18 16:10 01a1ee3d-1dc4-7180-a478-2d8380b13387
+drwxr-xr-x    4 user  staff   128 Nov 18 15:04 01a1edff-4958-7e72-943b-a70754d68b6b
+drwxr-xr-x    3 user  staff    96 Nov 18 15:03 01a1edff-4958-7a91-8397-b2d00c378dc4
+drwxr-xr-x    3 user  staff    96 Nov 18 15:03 01a1edff-4955-7a10-963e-553902ada9d6
+drwxr-xr-x    3 user  staff    96 Nov 18 15:03 01a1edff-4955-7100-abdb-0f947cfbe9b1
+drwxr-xr-x    3 user  staff    96 Nov 18 15:02 01a1edff-4957-7d32-abf7-8b10d2b278d1
+drwxr-xr-x    3 user  staff    96 Nov 17 20:37 01a1ea08-211f-77d3-8cb0-38e9d80e5020
+drwxr-xr-x    6 user  staff   192 Nov 17 20:25 01a1e9ff-6596-72c1-8e60-03a97d451b48
+drwxr-xr-x    3 user  staff    96 Nov 17 20:22 01a1e9fb-e66c-7ad1-b0a7-fa84294dadc4
+drwxr-xr-x    3 user  staff    96 Nov 17 20:22 01a1e9fb-e66c-7eb0-bcf0-e1ceef6c9b30
+drwxr-xr-x    3 user  staff    96 Nov 17 20:20 01a1e9fb-e63d-7103-b4d4-3cdcb316a926
+drwxr-xr-x    3 user  staff    96 Nov 17 20:20 01a1e9fb-e639-7ec2-84a9-356af1af854e
+drwxr-xr-x    3 user  staff    96 Nov 17 20:18 01a1e9f8-e9fa-72f2-ae34-1f74835b21d5
+drwxr-xr-x    3 user  staff    96 Nov 17 20:17 01a1e9f8-e9fa-76d1-a62d-fb3d89dc4370
+drwxr-xr-x    3 user  staff    96 Nov 17 20:17 01a1e9f8-e9fa-7502-a122-a96ea59d8d23
+drwxr-xr-x    3 user  staff    96 Nov 17 13:23 01a1e87e-6f1e-7701-9fa1-4b87be306cea
+drwxr-xr-x    3 user  staff    96 Nov 17 13:23 01a1e87e-6f1e-7d93-ba8b-4a4229c28dea
+drwxr-xr-x    3 user  staff    96 Nov 17 13:22 01a1e87d-5ffe-7cb3-96c7-7deb8b612032
+drwxr-xr-x    4 user  staff   128 Nov 17 13:00 01a1e867-9c0b-7f92-82c8-397471e7fff8
+drwxr-xr-x    3 user  staff    96 Nov 17 12:59 01a1e867-9c0a-76b0-bfc2-43237f8df005
+drwxr-xr-x    3 user  staff    96 Nov 17 12:59 01a1e867-9c0b-7c71-8aa3-7b8b38ae0d1d
+drwxr-xr-x    3 user  staff    96 Nov 17 12:59 01a1e867-9c0a-7772-a264-67ca1c7282ca
+drwxr-xr-x    3 user  staff    96 Nov 17 12:59 01a1e867-9c0a-7040-bd1c-e3ad4f5030f7
+drwxr-xr-x    3 user  staff    96 Nov 17 12:59 01a1e867-9c0a-70b3-841b-ec3854c27596
+drwxr-xr-x    4 user  staff   128 Nov 17 12:40 01a1e855-a701-7442-ae03-cc3ffb6621e3
+drwxr-xr-x    3 user  staff    96 Nov 17 12:39 01a1e855-a709-79a0-99cd-17130334a8df
+drwxr-xr-x    3 user  staff    96 Nov 17 12:39 01a1e855-a701-7da1-a516-cd1f6df23f6e
+drwxr-xr-x    3 user  staff    96 Nov 17 12:39 01a1e855-a6f9-7850-a693-0ae8f745ec1e
+drwxr-xr-x    3 user  staff    96 Nov 17 12:39 01a1e855-a6f9-7bc0-a4ba-8ede2624d63d
+drwxr-xr-x    3 user  staff    96 Nov 17 12:39 01a1e855-a6fd-7742-ae1e-b94c00c9838f
+drwxr-xr-x    3 user  staff    96 Nov 17 12:01 01a1e832-9884-7f60-b214-b47cdb74c7f3
+drwxr-xr-x    3 user  staff    96 Nov 17 12:01 01a1e832-9884-70e2-92cd-ff2a883c606d
+drwxr-xr-x    3 user  staff    96 Nov 17 12:01 01a1e832-9885-7210-a32a-02d3ba767321
+drwxr-xr-x    3 user  staff    96 Nov 17 12:01 01a1e832-9884-72f1-8cde-ace812e04e09
+drwxr-xr-x    3 user  staff    96 Nov 16 19:46 01a1e4b5-9ea4-7ea1-9b17-b39af97bf451
+drwxr-xr-x    3 user  staff    96 Nov 16 19:44 01a1e4b3-d370-7de2-9782-8e188625ad36
+drwxr-xr-x    3 user  staff    96 Nov 16 19:02 01a1e48d-b620-7d83-ae14-0e2b73d049f3
+drwxr-xr-x    3 user  staff    96 Nov 16 19:01 01a1e48c-997f-7473-89bb-d032007bab3e
+drwxr-xr-x    3 user  staff    96 Nov 16 19:00 01a1e48c-1c76-7233-bfaf-d874cc34d0be
+drwxr-xr-x    3 user  staff    96 Nov 16 19:00 01a1e48b-f765-77a3-a2d8-da4ca4882403
+drwxr-xr-x    3 user  staff    96 Nov 16 19:00 01a1e48b-f9e8-7891-b327-b533eaf123b2
+drwxr-xr-x    3 user  staff    96 Nov 16 19:00 01a1e48b-e396-7ac1-b5cf-2e4dd20555e0
+drwxr-xr-x    3 user  staff    96 Nov 16 18:59 01a1e48b-28d5-75e0-a209-6d36d395c403
+drwxr-xr-x    3 user  staff    96 Nov 16 18:59 01a1e489-d4fa-7393-b39e-27f07a2a2703
+drwxr-xr-x    3 user  staff    96 Nov 16 18:58 01a1e48a-5980-7d82-a236-402610e07953
+drwxr-xr-x    3 user  staff    96 Nov 16 18:58 01a1e48a-3b2a-70d0-b4de-8081629dc5b4
+drwxr-xr-x    3 user  staff    96 Nov 16 18:58 01a1e489-fa89-70d2-aa06-a6514c378ae4
+drwxr-xr-x    3 user  staff    96 Nov 16 18:58 01a1e48a-2ef3-7b70-9270-88abd66fface
+drwxr-xr-x    4 user  staff   128 Nov 16 18:57 01a1e488-297e-7a23-82dc-94e4115fc3a6
+drwxr-xr-x    3 user  staff    96 Nov 16 18:56 01a1e488-297e-73a3-8d55-9b14018172cb
+drwxr-xr-x    3 user  staff    96 Nov 16 18:56 01a1e488-2979-75d2-921f-aa43ca67a198
+drwxr-xr-x    3 user  staff    96 Nov 16 18:56 01a1e488-2988-7200-bba9-415a45331fa4
+drwxr-xr-x    3 user  staff    96 Nov 16 18:56 01a1e488-2976-70f1-ba41-0b25f3980ff3
+drwxr-xr-x    3 user  staff    96 Nov 16 18:56 01a1e488-29b0-7832-ab8b-469462ec95f8
+drwxr-xr-x    3 user  staff    96 Nov 16 18:56 01a1e488-d006-7d33-9496-6f945de3612c
+drwxr-xr-x    3 user  staff    96 Nov 16 18:49 01a1e481-6cf0-7561-b476-e1ef26a2c0e3
+drwxr-xr-x    3 user  staff    96 Nov 16 18:47 01a1e480-2a52-7532-900d-05b1bdf1fad9
+drwxr-xr-x    3 user  staff    96 Nov 16 18:47 01a1e480-6c9f-7402-a3a7-8aa9c9727cec
+drwxr-xr-x    3 user  staff    96 Nov 16 18:47 01a1e480-2821-7ab2-b73a-7cb7c47df013
+drwxr-xr-x    4 user  staff   128 Nov 16 18:47 01a1e47e-8a24-7310-ad2d-d3db611bc783
+drwxr-xr-x    3 user  staff    96 Nov 16 18:46 01a1e47f-6821-71b0-9122-12718816b10c
+drwxr-xr-x    3 user  staff    96 Nov 16 18:46 01a1e47f-0723-7683-88bb-3efbf1999850
+drwxr-xr-x    3 user  staff    96 Nov 16 18:46 01a1e47e-ad4f-7a30-9289-45dd0ec214f4
+drwxr-xr-x    3 user  staff    96 Nov 16 18:45 01a1e47d-b2d4-7b51-8ac3-aafba3db28aa
+drwxr-xr-x    3 user  staff    96 Nov 16 18:45 01a1e47e-3dec-74a2-95a1-55baef62e6e2
+drwxr-xr-x    3 user  staff    96 Nov 16 18:45 01a1e47d-aca6-7172-9d52-4733bc521881
+drwxr-xr-x    3 user  staff    96 Nov 16 18:44 01a1e47c-50ed-74a0-8587-c1ca165d048d
+drwxr-xr-x    3 user  staff    96 Nov 16 18:44 01a1e47c-ffc0-79e3-b4c7-d75df2905bba
+drwxr-xr-x    3 user  staff    96 Nov 16 18:44 01a1e47c-c0e7-7223-8faa-c22f51a5c3b0
+drwxr-xr-x    3 user  staff    96 Nov 16 18:43 01a1e47c-9a37-7f23-8990-0f40fb1800ae
+drwxr-xr-x    3 user  staff    96 Nov 16 18:43 01a1e47c-162a-7c20-9ba1-0b6f791a2fb1
+drwxr-xr-x    3 user  staff    96 Nov 16 18:43 01a1e47c-33b7-7673-a5fe-ba12743980dd
+drwxr-xr-x    3 user  staff    96 Nov 16 18:42 01a1e47b-1b37-7902-8fc1-d0fd289d645d
+drwxr-xr-x    4 user  staff   128 Nov 16 18:42 01a1e47a-2b3b-7880-98c3-f602fd1f80db
+drwxr-xr-x    3 user  staff    96 Nov 16 18:42 01a1e47b-0220-7d51-8009-f72055f605da
+drwxr-xr-x    3 user  staff    96 Nov 16 18:41 01a1e47a-c3d8-7d70-b912-f291112b21c1
+drwxr-xr-x    3 user  staff    96 Nov 16 18:41 01a1e47a-3fa0-72d0-8e78-a06a3dff455f
+drwxr-xr-x    3 user  staff    96 Nov 16 18:41 01a1e47a-2b41-7c81-b223-361dda5d4301
+drwxr-xr-x    3 user  staff    96 Nov 16 18:40 01a1e479-6ae2-7bd3-b877-09efec049df2
+drwxr-xr-x    3 user  staff    96 Nov 16 18:40 01a1e479-58f1-7a21-98f1-3a883ad3c165
+drwxr-xr-x    3 user  staff    96 Nov 16 18:40 01a1e479-26bd-71b1-af02-51e5a4fd9a26
+drwxr-xr-x    3 user  staff    96 Nov 16 18:39 01a1e478-b7d1-78c1-b4f1-63438bc4d9ba
+drwxr-xr-x    3 user  staff    96 Nov 16 18:39 01a1e478-4d8d-7a90-82d6-49cb2a8c4c3b
+drwxr-xr-x    3 user  staff    96 Nov 16 18:38 01a1e477-f545-7110-a78e-64fadfb8551e
+drwxr-xr-x    3 user  staff    96 Nov 16 18:38 01a1e477-b141-7252-94c1-0c56c95a8226
+drwxr-xr-x    3 user  staff    96 Nov 16 18:38 01a1e477-67e8-7ed0-86a6-b8b4611ab315
+drwxr-xr-x    3 user  staff    96 Nov 16 18:38 01a1e477-b368-7593-9ca3-6e03c166553c
+drwxr-xr-x    3 user  staff    96 Nov 16 18:37 01a1e477-3655-7ef2-8895-e45b64e94c9d
+drwxr-xr-x    3 user  staff    96 Nov 16 18:37 01a1e475-ff6f-7232-bc02-8c142f32a69d
+drwxr-xr-x    3 user  staff    96 Nov 16 18:37 01a1e475-e560-7493-b48b-11c0b0c5fb83
+drwxr-xr-x    3 user  staff    96 Nov 16 18:36 01a1e475-e556-7fc3-9621-398194dee32d
+drwxr-xr-x    3 user  staff    96 Nov 16 18:36 01a1e475-fa11-77e3-aebd-1d8dc05dd057
+drwxr-xr-x    3 user  staff    96 Nov 16 18:36 01a1e475-f2d7-7d30-a77e-cfedb1a43d7c
+drwxr-xr-x    3 user  staff    96 Nov 16 18:36 01a1e475-ac1f-7ec1-9757-6b01edbb6b4c
+drwxr-xr-x    3 user  staff    96 Nov 16 18:36 01a1e475-a6ed-77b0-8535-5cee75db333a
+drwxr-xr-x    3 user  staff    96 Nov 16 18:34 01a1e474-33f5-7df0-b9ff-19d0b02d694d
+drwxr-xr-x    3 user  staff    96 Nov 16 18:34 01a1e474-29e8-7a72-b80c-653b4e8299e6
+drwxr-xr-x    3 user  staff    96 Nov 16 18:34 01a1e474-3a86-7420-bb77-a8b430b2ed3e
+drwxr-xr-x    3 user  staff    96 Nov 16 18:34 01a1e474-00bc-7cb3-874c-dd6fd70bdda0
+drwxr-xr-x    3 user  staff    96 Nov 16 18:34 01a1e474-0159-74e0-8fd0-9f73a9579810
+drwxr-xr-x    3 user  staff    96 Nov 16 18:34 01a1e474-00d4-7793-adaf-dad6b422cca6
+drwxr-xr-x    3 user  staff    96 Nov 16 18:34 01a1e474-2270-7a62-b517-ed000a509c4e
+drwxr-xr-x    3 user  staff    96 Nov 16 18:32 01a1e472-3df0-75c0-bf5c-269826a00af2
+drwxr-xr-x    3 user  staff    96 Nov 16 18:32 01a1e472-3e71-72e3-a1a1-92afc8be02f2
+drwxr-xr-x    3 user  staff    96 Nov 16 18:32 01a1e472-3ded-7571-9de0-bc372225ce23
+drwxr-xr-x    3 user  staff    96 Nov 16 18:32 01a1e472-3e26-7320-b3f2-46b72508966a
+drwxr-xr-x    3 user  staff    96 Nov 16 18:29 01a1e46f-cd80-7c83-be78-eeaba18223fb
+drwxr-xr-x    4 user  staff   128 Nov 16 18:21 01a1e467-e4fd-7d10-9407-dc7728e36a55
+drwxr-xr-x    4 user  staff   128 Nov 16 18:21 01a1e467-e4f0-74b1-9360-905fa7c199d0
+drwxr-xr-x    3 user  staff    96 Nov 16 18:21 01a1e467-e4fa-7f53-8475-03723126fcfe
+drwxr-xr-x    3 user  staff    96 Nov 16 18:21 01a1e467-e4f6-7610-a003-62d87e844149
+drwxr-xr-x    3 user  staff    96 Nov 16 18:20 01a1e467-e4f2-73a0-a47d-79966c293b37
+drwxr-xr-x    4 user  staff   128 Nov 16 18:11 01a1e45e-8ea1-7e23-b4cf-faea0330d52b
+drwxr-xr-x    4 user  staff   128 Nov 16 18:11 01a1e45e-8ef8-7a72-923d-2344b2937b1e
+drwxr-xr-x    3 user  staff    96 Nov 16 18:11 01a1e45e-8ec6-7e03-ac33-482e91e22c03
+drwxr-xr-x    3 user  staff    96 Nov 16 18:06 01a1e45a-8d57-7622-8228-294425ba5690
+drwxr-xr-x    4 user  staff   128 Nov 16 11:51 01a1e302-0216-7e30-9571-89989e12f3ff
+drwxr-xr-x    3 user  staff    96 Nov 16 11:43 01a1e2fa-d048-7b30-83fa-53c7c6611b22
+drwxr-xr-x    3 user  staff    96 Nov 16 11:40 01a1e2f9-5466-7ac0-819d-fd266ba8da35
+drwxr-xr-x    3 user  staff    96 Nov 16 11:38 01a1e2f7-16d9-7103-9dbf-fe82480700ba
+drwxr-xr-x    3 user  staff    96 Nov 14 16:41 01a1d9c0-adfa-7ee3-9233-e4dae7a86b22
+drwxr-xr-x    3 user  staff    96 Nov 14 16:41 01a1d9c0-9256-78b0-9864-32168b0d55a3
+drwxr-xr-x    3 user  staff    96 Nov 14 16:41 01a1d9c0-84ca-78e1-9fdf-1ffae8a083ee
+drwxr-xr-x    3 user  staff    96 Nov 14 16:41 01a1d9c0-5afc-7823-bc75-b0e5ef0f83b9
+drwxr-xr-x    3 user  staff    96 Nov 14 16:40 01a1d9c0-460e-7121-8d42-a2da36e56fc8
+drwxr-xr-x    3 user  staff    96 Nov 14 16:40 01a1d9c0-33a4-7e40-b8ca-29ff94a29372
+drwxr-xr-x    3 user  staff    96 Nov 14 16:40 01a1d9c0-31a2-7d11-8e7f-4c1697b46358
+drwxr-xr-x    3 user  staff    96 Nov 14 16:40 01a1d9c0-2ee9-7970-8fee-baa777d0d7af
+drwxr-xr-x    3 user  staff    96 Nov 14 16:40 01a1d9bf-b323-74f1-a725-a40e3d0841b5
+drwxr-xr-x    3 user  staff    96 Nov 14 16:40 01a1d9bf-d89c-75a2-83ba-e0a83e79e683
+drwxr-xr-x    3 user  staff    96 Nov 14 16:40 01a1d9bf-736b-7d13-aafb-8609468fa150
+drwxr-xr-x    3 user  staff    96 Nov 14 16:40 01a1d9bf-705e-7102-ae2b-7f469c05a793
+drwxr-xr-x    3 user  staff    96 Nov 14 16:40 01a1d9bf-925d-72c0-8b6c-ece31b5eb621
+drwxr-xr-x    3 user  staff    96 Nov 14 16:40 01a1d9bf-79ab-7670-9c8b-7c4ff69dcfef
+drwxr-xr-x    3 user  staff    96 Nov 14 16:39 01a1d9bf-3418-79e3-911d-1e620ff14059
+drwxr-xr-x    3 user  staff    96 Nov 14 16:39 01a1d9be-f1d2-7930-8af9-a5d0f08f90fe
+drwxr-xr-x    3 user  staff    96 Nov 14 16:39 01a1d9be-ea38-7002-8f4d-53112fa7cd9a
+drwxr-xr-x    3 user  staff    96 Nov 14 16:39 01a1d9be-ad6b-7631-acf2-4e160ee30084
+drwxr-xr-x    3 user  staff    96 Nov 14 16:39 01a1d9be-6ef5-7053-b4d7-1287daf08da1
+drwxr-xr-x    3 user  staff    96 Nov 14 16:39 01a1d9be-b23d-7ad2-a9c3-d8b46a81229b
+drwxr-xr-x    3 user  staff    96 Nov 14 16:39 01a1d9be-c5f5-7ce2-b16d-2a82e2db5519
+drwxr-xr-x    3 user  staff    96 Nov 14 16:39 01a1d9be-8056-7030-a137-e575007ba620
+drwxr-xr-x    3 user  staff    96 Nov 14 16:38 01a1d9be-6396-7ee2-aa4c-25bc53e90a92
+drwxr-xr-x    3 user  staff    96 Nov 14 16:38 01a1d9be-2af5-7042-91c5-53570fc8b1b2
+drwxr-xr-x    3 user  staff    96 Nov 14 16:38 01a1d9be-1eb7-7ff0-a66b-218993386dc7
+drwxr-xr-x    3 user  staff    96 Nov 14 16:38 01a1d9be-178b-7ec3-b869-2f322c7a7719
+drwxr-xr-x    3 user  staff    96 Nov 14 16:38 01a1d9bd-f39f-7cc3-b324-99017ef152bc
+drwxr-xr-x    3 user  staff    96 Nov 14 16:38 01a1d9be-10c8-72b2-a845-fb5904c28da3
+drwxr-xr-x    3 user  staff    96 Nov 14 16:38 01a1d9bd-ddf6-7650-9f2a-ad929699fb47
+drwxr-xr-x    3 user  staff    96 Nov 14 16:38 01a1d9bd-ae6e-72f0-930a-093f26bb9647
+drwxr-xr-x    3 user  staff    96 Nov 14 16:38 01a1d9bd-9a05-7a51-892d-40fe8e864f98
+drwxr-xr-x    3 user  staff    96 Nov 14 16:37 01a1d9bd-870c-7073-a12c-e2a8c6c66a29
+drwxr-xr-x    3 user  staff    96 Nov 14 16:37 01a1d9bd-5c41-7ac1-b7bf-f7626293507f
+drwxr-xr-x    3 user  staff    96 Nov 14 16:37 01a1d9bd-7ab0-7160-beda-c2241e280dd9
+drwxr-xr-x    3 user  staff    96 Nov 14 16:37 01a1d9bd-4ee2-7553-9d45-bd72c40458e4
+drwxr-xr-x    3 user  staff    96 Nov 14 16:37 01a1d9bd-4c05-7001-97db-a4111323be94
+drwxr-xr-x    3 user  staff    96 Nov 14 16:37 01a1d9bd-3012-7b92-8912-cd7a4a46c3e9
+drwxr-xr-x    3 user  staff    96 Nov 14 16:37 01a1d9bc-f54f-7e00-8fba-b8cce19c194c
+drwxr-xr-x    3 user  staff    96 Nov 14 16:37 01a1d9bc-ecec-7782-8aba-687139eae295
+drwxr-xr-x    3 user  staff    96 Nov 14 16:37 01a1d9bc-e0d1-7c12-af3a-ad83a70d69d0
+drwxr-xr-x    3 user  staff    96 Nov 14 16:37 01a1d9bc-d9e6-7f61-aa6a-20265fe26f69
+drwxr-xr-x    3 user  staff    96 Nov 14 16:37 01a1d9bc-acdc-71b0-90c6-5ed99629f8f3
+drwxr-xr-x    3 user  staff    96 Nov 14 16:36 01a1d9bc-9c9b-7a20-b163-01b168831d63
+drwxr-xr-x    3 user  staff    96 Nov 14 16:36 01a1d9bc-7b26-72d0-b8aa-107751574481
+drwxr-xr-x    3 user  staff    96 Nov 14 16:36 01a1d9bc-7179-7710-91e2-9d72d131092b
+drwxr-xr-x    3 user  staff    96 Nov 14 16:36 01a1d9bc-472f-77f2-986f-2f54b1da5e27
+drwxr-xr-x    3 user  staff    96 Nov 14 16:36 01a1d9bc-2d22-7823-920b-cf92ce43882a
+drwxr-xr-x    3 user  staff    96 Nov 14 16:36 01a1d9bc-3643-7c82-b3ef-40fb3045a574
+drwxr-xr-x    3 user  staff    96 Nov 14 16:36 01a1d9bc-19e0-7c62-893b-b13ef6b39081
+drwxr-xr-x    3 user  staff    96 Nov 14 16:36 01a1d9bb-a12e-75a0-9b7e-46371b2cff04
+drwxr-xr-x    3 user  staff    96 Nov 14 16:36 01a1d9bb-dae9-7a81-a741-ea896fb04673
+drwxr-xr-x    3 user  staff    96 Nov 14 16:36 01a1d9bb-d792-7ee1-a9f3-51449845e820
+drwxr-xr-x    3 user  staff    96 Nov 14 16:36 01a1d9bb-c319-7950-bf67-06fbc6f8cac5
+drwxr-xr-x    3 user  staff    96 Nov 14 16:35 01a1d9bb-a1cd-78c0-9e2e-0fe9f8b5efde
+drwxr-xr-x    3 user  staff    96 Nov 14 16:35 01a1d9bb-8d1f-7ca1-81d7-8a02f03c8d96
+drwxr-xr-x    3 user  staff    96 Nov 14 16:35 01a1d9bb-5aff-7ad2-8aa0-a383f2faa961
+drwxr-xr-x    3 user  staff    96 Nov 14 16:35 01a1d9bb-5025-79f3-a589-eb9ebc01b48b
+drwxr-xr-x    3 user  staff    96 Nov 14 16:35 01a1d9bb-1525-7082-ad5f-da0979f98563
+drwxr-xr-x    3 user  staff    96 Nov 14 16:35 01a1d9bb-0e33-7660-b524-70600f3ea621
+drwxr-xr-x    3 user  staff    96 Nov 14 16:35 01a1d9bb-0703-7552-8fc7-311111a14972
+drwxr-xr-x    3 user  staff    96 Nov 14 16:35 01a1d9ba-e476-7de1-87c2-7472b9380896
+drwxr-xr-x    3 user  staff    96 Nov 14 16:35 01a1d9ba-f6d3-7db0-ab5a-30586272842d
+drwxr-xr-x    3 user  staff    96 Nov 14 16:35 01a1d9ba-d559-7f52-ac6a-9b7d607612c2
+drwxr-xr-x    3 user  staff    96 Nov 14 16:34 01a1d9ba-92ab-7230-842a-85b665c57b06
+drwxr-xr-x    3 user  staff    96 Nov 14 16:34 01a1d9ba-752f-7652-88e4-3cd48a19e6f0
+drwxr-xr-x    3 user  staff    96 Nov 14 16:34 01a1d9ba-64ac-7592-8296-23b5d49bb5b3
+drwxr-xr-x    3 user  staff    96 Nov 14 16:34 01a1d9ba-615e-7a81-a51d-1b4955ae19e7
+drwxr-xr-x    3 user  staff    96 Nov 14 16:34 01a1d9ba-6e11-7271-9c4c-a210d44ac211
+drwxr-xr-x    3 user  staff    96 Nov 14 16:34 01a1d9ba-4799-7b63-88a9-3deb6cd0a8e0
+drwxr-xr-x    3 user  staff    96 Nov 14 16:34 01a1d9ba-2f68-7450-b123-5a2344320de9
+drwxr-xr-x    3 user  staff    96 Nov 14 16:34 01a1d9ba-10b1-7280-bfaa-6a39004de6dd
+drwxr-xr-x    3 user  staff    96 Nov 14 16:34 01a1d9b9-edab-7ba0-ab59-3a6fad1580b1
+drwxr-xr-x    3 user  staff    96 Nov 14 16:33 01a1d9b9-cbaf-73a1-aa8c-a4c89aa56e95
+drwxr-xr-x    3 user  staff    96 Nov 14 16:33 01a1d9b9-af5f-7890-9944-d4cadb63e43f
+drwxr-xr-x    3 user  staff    96 Nov 14 16:33 01a1d9b9-9244-7483-a74b-48a72e88f35d
+drwxr-xr-x    3 user  staff    96 Nov 14 16:33 01a1d9b9-b4a5-7101-b806-d3af87dc0f67
+drwxr-xr-x    3 user  staff    96 Nov 14 16:33 01a1d9b9-9583-71a0-9430-a0eae7cda3e3
+drwxr-xr-x    3 user  staff    96 Nov 14 16:33 01a1d9b9-75ea-75d2-b6f6-9a85b0053f0a
+drwxr-xr-x    3 user  staff    96 Nov 14 16:33 01a1d9b9-4630-7900-9ff9-780803880ef5
+drwxr-xr-x    3 user  staff    96 Nov 14 16:33 01a1d9b9-39b4-7141-8b4d-fae9d33616c0
+drwxr-xr-x    3 user  staff    96 Nov 14 16:33 01a1d9b9-1e6c-7fc1-9ef6-09b93a74d46c
+drwxr-xr-x    3 user  staff    96 Nov 14 16:33 01a1d9b8-e18e-7c60-9bf7-f303dffb3ae8
+drwxr-xr-x    3 user  staff    96 Nov 14 16:33 01a1d9b8-df43-7951-8e63-8b664a869437
+drwxr-xr-x    3 user  staff    96 Nov 14 16:32 01a1d9b8-d36f-7d30-8eaf-897a5833c612
+drwxr-xr-x    3 user  staff    96 Nov 14 16:32 01a1d9b8-d272-7f32-bf1c-bd47f8ca5452
+drwxr-xr-x    3 user  staff    96 Nov 14 16:32 01a1d9b8-b693-7692-9ed4-b24b362f3356
+drwxr-xr-x    3 user  staff    96 Nov 14 16:32 01a1d9b8-8943-72c1-a5d7-ee151323e4bb
+drwxr-xr-x    3 user  staff    96 Nov 14 16:32 01a1d9b8-6d63-71d1-9040-4427df2ee855
+drwxr-xr-x    3 user  staff    96 Nov 14 16:32 01a1d9b8-42f6-7fd3-8f6e-4d1d3d6c0bfa
+drwxr-xr-x    3 user  staff    96 Nov 14 16:32 01a1d9b8-20d4-7a70-92fa-565506a6da3b
+drwxr-xr-x    3 user  staff    96 Nov 14 16:32 01a1d9b8-33b5-7ec0-a6df-974beea67bd4
+drwxr-xr-x    3 user  staff    96 Nov 14 16:32 01a1d9b8-186b-7031-b82f-eb51e5ebf3f9
+drwxr-xr-x    3 user  staff    96 Nov 14 16:31 01a1d9b7-f4e4-7da2-b91e-9e1708d6b9ad
+drwxr-xr-x    3 user  staff    96 Nov 14 16:31 01a1d9b8-0aa4-7940-bd53-ee7d91685f08
+drwxr-xr-x    3 user  staff    96 Nov 14 16:31 01a1d9b7-e600-71d1-a912-a8358a2a496a
+drwxr-xr-x    3 user  staff    96 Nov 14 16:31 01a1d9b7-b446-7e63-bb7a-fb31042f5760
+drwxr-xr-x    3 user  staff    96 Nov 14 16:31 01a1d9b7-9247-7e83-b9cf-deabc71f9fda
+drwxr-xr-x    3 user  staff    96 Nov 14 16:31 01a1d9b7-9391-7052-8644-82954433e789
+drwxr-xr-x    3 user  staff    96 Nov 14 16:31 01a1d9b7-654a-7d83-9098-2ac9cec50074
+drwxr-xr-x    3 user  staff    96 Nov 14 16:31 01a1d9b7-63cf-7b52-a2fe-e6d5d387106c
+drwxr-xr-x    3 user  staff    96 Nov 14 16:31 01a1d9b7-61ee-7180-8bc9-b50da6eb6c3c
+drwxr-xr-x    3 user  staff    96 Nov 14 16:31 01a1d9b7-4508-7851-a55f-266fab1e0115
+drwxr-xr-x    3 user  staff    96 Nov 14 16:31 01a1d9b7-31d4-7001-a576-88a4863b12cc
+drwxr-xr-x    3 user  staff    96 Nov 14 16:30 01a1d9b6-ee7a-72f0-b546-598bf89ea4c9
+drwxr-xr-x    3 user  staff    96 Nov 14 16:30 01a1d9b6-ebb0-7b83-a773-e1e544ca0bfb
+drwxr-xr-x    3 user  staff    96 Nov 14 16:30 01a1d9b6-de50-7e61-99b8-6f6f9c48e532
+drwxr-xr-x    3 user  staff    96 Nov 14 16:30 01a1d9b6-ae3f-7100-8e97-4e81840e3a1d
+drwxr-xr-x    3 user  staff    96 Nov 14 16:30 01a1d9b6-b719-7971-9653-d478d80149e7
+drwxr-xr-x    3 user  staff    96 Nov 14 16:30 01a1d9b6-6642-7de2-b4dc-bda9833d9bb3
+drwxr-xr-x    3 user  staff    96 Nov 14 16:30 01a1d9b6-8d9a-7310-9ce0-4601c6962cd7
+drwxr-xr-x    3 user  staff    96 Nov 14 16:30 01a1d9b6-795a-76a0-a453-c4c08397779b
+drwxr-xr-x    3 user  staff    96 Nov 14 16:30 01a1d9b6-1c42-7070-9536-623f1e58bc54
+drwxr-xr-x    3 user  staff    96 Nov 14 16:29 01a1d9b6-2b8b-70a1-82fe-df63702ae86b
+drwxr-xr-x    3 user  staff    96 Nov 14 16:29 01a1d9b6-378a-7d21-84df-0850be2b2fc1
+drwxr-xr-x    3 user  staff    96 Nov 14 16:29 01a1d9b5-fbb9-75b3-867a-0951958ee648
+drwxr-xr-x    3 user  staff    96 Nov 14 16:29 01a1d9b5-ec62-7723-b2fd-a7ed7d19e147
+drwxr-xr-x    3 user  staff    96 Nov 14 16:29 01a1d9b5-da06-77b3-8fc5-9fa147d54d01
+drwxr-xr-x    3 user  staff    96 Nov 14 16:29 01a1d9b5-d46e-7c93-ab51-78255ed44b4b
+drwxr-xr-x    3 user  staff    96 Nov 14 16:29 01a1d9b5-af9c-7590-ac5d-c47d69457836
+drwxr-xr-x    3 user  staff    96 Nov 14 16:29 01a1d9b5-5da9-7cd0-a1d7-079def72f196
+drwxr-xr-x    3 user  staff    96 Nov 14 16:29 01a1d9b5-63f9-7ed3-852a-6db3fec0ed4a
+drwxr-xr-x    3 user  staff    96 Nov 14 16:29 01a1d9b5-4fb2-74e2-8fd6-2d8dd722cc32
+drwxr-xr-x    3 user  staff    96 Nov 14 16:28 01a1d9b4-eab2-7a52-a68b-9f48f5f99894
+drwxr-xr-x    3 user  staff    96 Nov 14 16:28 01a1d9b5-1d74-70a3-b5dc-489fe7f69db7
+drwxr-xr-x    3 user  staff    96 Nov 14 16:28 01a1d9b5-3a5d-7a83-be9e-dd27fb8e7b95
+drwxr-xr-x    3 user  staff    96 Nov 14 16:28 01a1d9b5-1e6a-7eb3-a554-ca37d2e273ee
+drwxr-xr-x    3 user  staff    96 Nov 14 16:28 01a1d9b4-8a6a-79f2-98a9-ebbcf6e1d036
+drwxr-xr-x    3 user  staff    96 Nov 14 16:28 01a1d9b4-b850-7e73-8128-bffbc97be05b
+drwxr-xr-x    3 user  staff    96 Nov 14 16:28 01a1d9b4-9a6d-7570-8503-9e5da8a44712
+drwxr-xr-x    3 user  staff    96 Nov 14 16:28 01a1d9b4-9a25-7c12-8176-400097922bb4
+drwxr-xr-x    3 user  staff    96 Nov 14 16:28 01a1d9b4-90ce-7b10-978f-166951952189
+drwxr-xr-x    3 user  staff    96 Nov 14 16:28 01a1d9b4-54dc-7581-9370-2a29fb5bc958
+drwxr-xr-x    3 user  staff    96 Nov 14 16:28 01a1d9b4-68ad-7c03-8459-0ead600b3b6c
+drwxr-xr-x    3 user  staff    96 Nov 14 16:27 01a1d9b4-3b20-7081-91e9-7a54f913527d
+drwxr-xr-x    3 user  staff    96 Nov 14 16:27 01a1d9b4-018e-7fd3-9ad8-b2c5286b58e9
+drwxr-xr-x    3 user  staff    96 Nov 14 16:27 01a1d9b3-d186-7233-95a6-f6de44a6ff9f
+drwxr-xr-x    3 user  staff    96 Nov 14 16:27 01a1d9b3-e259-73c3-b05e-c795158f3fdd
+drwxr-xr-x    3 user  staff    96 Nov 14 16:27 01a1d9b3-c0c9-77c0-a6e5-0ee5b4f43475
+drwxr-xr-x    3 user  staff    96 Nov 14 16:27 01a1d9b3-92d8-7580-9e48-5ceb9f31abd0
+drwxr-xr-x    3 user  staff    96 Nov 14 16:27 01a1d9b3-9b1f-71f0-8dca-a5f478ebaaef
+drwxr-xr-x    3 user  staff    96 Nov 14 16:27 01a1d9b3-8be8-7393-804b-acb8e581c93d
+drwxr-xr-x    3 user  staff    96 Nov 14 16:27 01a1d9b3-86f6-7ee0-bfba-13f5e461952c
+drwxr-xr-x    3 user  staff    96 Nov 14 16:26 01a1d9b3-4822-7ae1-ba32-1dc54b038d0b
+drwxr-xr-x    3 user  staff    96 Nov 14 16:26 01a1d9b3-2c16-7a50-b426-44fb8e5c9f85
+drwxr-xr-x    3 user  staff    96 Nov 14 16:26 01a1d9b3-2c15-7d02-b594-a882ac8ee91a
+drwxr-xr-x    3 user  staff    96 Nov 14 16:26 01a1d9b2-e9a3-7bd3-80b2-52c91a9f48f4
+drwxr-xr-x    3 user  staff    96 Nov 14 16:26 01a1d9b2-dd18-7bd2-b9ba-27d9b9e9c30e
+drwxr-xr-x    3 user  staff    96 Nov 14 16:26 01a1d9b2-9298-7863-9665-87c5fa2a405f
+drwxr-xr-x    3 user  staff    96 Nov 14 16:26 01a1d9b2-cd57-7a31-ae3d-5bece84da512
+drwxr-xr-x    3 user  staff    96 Nov 14 16:26 01a1d9b2-cebb-7f93-92de-e9cb54f3565b
+drwxr-xr-x    3 user  staff    96 Nov 14 16:26 01a1d9b2-4500-7081-a0a3-a5ab4e79f22f
+drwxr-xr-x    3 user  staff    96 Nov 14 16:25 01a1d9b2-3b6f-7521-8b03-3f82a2b6f255
+drwxr-xr-x    3 user  staff    96 Nov 14 16:25 01a1d9b1-f4d3-7563-a5d3-451f38f3aa86
+drwxr-xr-x    3 user  staff    96 Nov 14 16:25 01a1d9b2-43a4-7fe1-81e9-43b76a51827f
+drwxr-xr-x    3 user  staff    96 Nov 14 16:25 01a1d9b2-27b8-7b12-9e99-379a79f96b13
+drwxr-xr-x    3 user  staff    96 Nov 14 16:25 01a1d9b2-1149-72d2-960f-451ead42c843
+drwxr-xr-x    3 user  staff    96 Nov 14 16:25 01a1d9b2-08c7-7833-a6ce-91bec23bb180
+drwxr-xr-x    3 user  staff    96 Nov 14 16:25 01a1d9b1-ee19-7383-a14e-1e648399a0d5
+drwxr-xr-x    3 user  staff    96 Nov 14 16:24 01a1d9b1-833b-7772-a2b1-fecc629cf1f2
+drwxr-xr-x    3 user  staff    96 Nov 14 16:24 01a1d9b1-83fb-7f41-a034-e39fcea5bb11
+drwxr-xr-x    3 user  staff    96 Nov 14 16:24 01a1d9b1-8e50-7bc0-81a9-fc133f4b0544
+drwxr-xr-x    3 user  staff    96 Nov 14 16:24 01a1d9b1-6059-7fc2-b9bf-7e2f853c3f64
+drwxr-xr-x    3 user  staff    96 Nov 14 16:24 01a1d9b1-440b-7d03-b3db-3a9e200e2bbd
+drwxr-xr-x    3 user  staff    96 Nov 14 16:24 01a1d9b1-5cc0-75d2-8f8c-95dc4f93bf45
+drwxr-xr-x    3 user  staff    96 Nov 14 16:24 01a1d9b1-3b7c-79d1-8c0a-058c957755bf
+drwxr-xr-x    3 user  staff    96 Nov 14 16:24 01a1d9b1-417f-7f73-87c6-a4c776059900
+drwxr-xr-x    3 user  staff    96 Nov 14 16:24 01a1d9b0-7208-78c2-87ee-dfe06b217e5d
+drwxr-xr-x    3 user  staff    96 Nov 14 16:24 01a1d9b0-b0ce-7530-8f11-4d3348d67374
+drwxr-xr-x    3 user  staff    96 Nov 14 16:24 01a1d9b0-b0ce-7bd1-aa92-90bbbee06ea7
+drwxr-xr-x    3 user  staff    96 Nov 14 16:23 01a1d9b0-9c88-77a1-91b6-dec2cea162cc
+drwxr-xr-x    3 user  staff    96 Nov 14 16:23 01a1d9b0-46b3-7d23-93e6-3c60ff127f15
+drwxr-xr-x    3 user  staff    96 Nov 14 16:23 01a1d9b0-6f4d-7ab2-8fef-4c3deaa7b2bb
+drwxr-xr-x    3 user  staff    96 Nov 14 16:23 01a1d9b0-4c15-7730-b644-505147920196
+drwxr-xr-x    3 user  staff    96 Nov 14 16:23 01a1d9b0-6f4d-7dd3-af63-c6b917d1bc02
+drwxr-xr-x    3 user  staff    96 Nov 14 16:23 01a1d9b0-0707-7c32-8ec9-06c1be99d424
+drwxr-xr-x    3 user  staff    96 Nov 14 16:23 01a1d9af-eec4-7bc3-a843-9a4b1a0f3c27
+drwxr-xr-x    3 user  staff    96 Nov 14 16:23 01a1d9af-d135-7eb3-8d11-06298800a218
+drwxr-xr-x    3 user  staff    96 Nov 14 16:22 01a1d9af-c4d1-7d11-b20e-982eba23a542
+drwxr-xr-x    3 user  staff    96 Nov 14 16:22 01a1d9af-aee9-75f0-aa4d-4e634e637795
+drwxr-xr-x    3 user  staff    96 Nov 14 16:22 01a1d9af-a652-7180-962b-b166669f33ba
+drwxr-xr-x    3 user  staff    96 Nov 14 16:22 01a1d9af-a6c8-7650-909f-6b6c426462fd
+drwxr-xr-x    3 user  staff    96 Nov 14 16:22 01a1d9af-1f30-7900-9875-875bea474570
+drwxr-xr-x    3 user  staff    96 Nov 14 16:22 01a1d9af-520b-7953-ab05-f051b8a61dde
+drwxr-xr-x    3 user  staff    96 Nov 14 16:22 01a1d9ae-d723-7b33-aad2-c61bea788fc9
+drwxr-xr-x    3 user  staff    96 Nov 14 16:22 01a1d9ae-d1e4-70a2-969c-f5d915be2ea1
+drwxr-xr-x    3 user  staff    96 Nov 14 16:22 01a1d9ae-f6fa-77d0-b5ac-55fbc4e896d6
+drwxr-xr-x    3 user  staff    96 Nov 14 16:22 01a1d9ae-e977-77c0-ad05-b69514a676c8
+drwxr-xr-x    3 user  staff    96 Nov 14 16:22 01a1d9ae-dd87-73e0-96e7-ff786a3ac8a6
+drwxr-xr-x    3 user  staff    96 Nov 14 16:22 01a1d9ae-f937-7182-9628-aa0584496036
+drwxr-xr-x    3 user  staff    96 Nov 14 16:21 01a1d9ae-0e37-7f12-ab33-0e38d715bbbb
+drwxr-xr-x    3 user  staff    96 Nov 14 16:21 01a1d9ae-0e39-7340-8a0f-29317e5e2786
+drwxr-xr-x    3 user  staff    96 Nov 14 16:21 01a1d9ae-0e39-7532-99fd-34e54a34e957
+drwxr-xr-x    3 user  staff    96 Nov 14 16:21 01a1d9ae-0e37-7b91-bd1a-215f4f978c82
+drwxr-xr-x    3 user  staff    96 Nov 14 16:21 01a1d9ae-0e37-7d61-b407-a49c9c276669
+drwxr-xr-x    3 user  staff    96 Nov 14 16:21 01a1d9ae-0e36-7332-998e-090a4b833499
+drwxr-xr-x    3 user  staff    96 Nov 14 16:21 01a1d9ae-0e39-7fd3-a78c-9f2b6ef01ba5
+drwxr-xr-x    3 user  staff    96 Nov 14 16:21 01a1d9ae-0e39-7d90-8072-dc2ce0bea54a
+drwxr-xr-x    3 user  staff    96 Nov 14 16:15 01a1d9a8-a8f3-7d30-a258-2058edb7f9a3
+drwxr-xr-x    3 user  staff    96 Nov 14 16:15 01a1d9a8-a8f3-7852-9391-48df492ca347
+drwxr-xr-x    3 user  staff    96 Nov 14 16:15 01a1d9a8-a8f2-7090-8fc4-006502876e4e
+drwxr-xr-x    3 user  staff    96 Nov 14 16:15 01a1d9a8-a8f2-7021-9a48-59f501597cf9
+drwxr-xr-x    3 user  staff    96 Nov 14 16:15 01a1d9a8-a8f3-7522-b88e-497efaa06920
+drwxr-xr-x    3 user  staff    96 Nov 14 16:15 01a1d9a8-a8f2-7d00-b46f-6d39fcde84fe
+drwxr-xr-x    3 user  staff    96 Nov 14 16:15 01a1d9a8-719c-7692-882a-ca958cb4130d
+drwxr-xr-x    3 user  staff    96 Nov 14 16:15 01a1d9a8-71a1-77d1-9d42-346b155f8c4b
+drwxr-xr-x    3 user  staff    96 Nov 14 16:14 01a1d9a8-718d-76e3-af03-997d79cac764
+drwxr-xr-x    3 user  staff    96 Nov 14 16:14 01a1d9a8-718b-7af2-9969-7a47598ca533
+drwxr-xr-x    3 user  staff    96 Nov 14 16:14 01a1d9a8-716f-7183-a7ab-745570583c9c
+drwxr-xr-x    3 user  staff    96 Nov 14 16:14 01a1d9a8-717f-7c11-8f7d-e8bf8507e6be
+drwxr-xr-x    3 user  staff    96 Nov 14 16:14 01a1d9a8-42a0-7873-a36d-6c48ae1328b1
+drwxr-xr-x    3 user  staff    96 Nov 14 16:14 01a1d9a8-42a0-7321-8aed-6346c9c71246
+drwxr-xr-x    3 user  staff    96 Nov 14 16:14 01a1d9a8-42a0-73e3-89af-ccb7980885f0
+drwxr-xr-x    3 user  staff    96 Nov 14 16:14 01a1d9a8-42a0-71d0-b51c-5b6febcbc740
+drwxr-xr-x    3 user  staff    96 Nov 14 16:14 01a1d9a8-429f-7ca2-ae44-a494d8099d42
+drwxr-xr-x    3 user  staff    96 Nov 14 16:14 01a1d9a8-429f-7d03-b000-c106a833a273
+drwxr-xr-x    3 user  staff    96 Nov 14 16:13 01a1d9a7-2571-76c1-bece-38f5083c232c
+drwxr-xr-x    3 user  staff    96 Nov 14 16:13 01a1d9a7-0796-7ed0-9867-fb7c703c4d7e
+drwxr-xr-x    3 user  staff    96 Nov 14 16:13 01a1d9a7-21bc-7a72-a890-3499d3aaec32
+drwxr-xr-x    3 user  staff    96 Nov 14 16:13 01a1d9a7-1127-7762-898e-804103a4e40f
+drwxr-xr-x    3 user  staff    96 Nov 14 16:13 01a1d9a7-146b-7f80-b15f-a23db0ecd7bf
+drwxr-xr-x    3 user  staff    96 Nov 14 16:13 01a1d9a7-13db-75c1-b7e2-e6a4798960e3
+drwxr-xr-x    3 user  staff    96 Nov 14 16:12 01a1d9a6-8728-7da0-9264-805f0c6a3405
+drwxr-xr-x    3 user  staff    96 Nov 14 16:12 01a1d9a6-8bba-7811-830b-b4a029d68a62
+drwxr-xr-x    3 user  staff    96 Nov 14 16:12 01a1d9a6-8712-7d80-955c-0036512e4ea7
+drwxr-xr-x    3 user  staff    96 Nov 14 16:12 01a1d9a6-8181-72d2-bc31-143f8c94dc09
+drwxr-xr-x    3 user  staff    96 Nov 14 16:12 01a1d9a6-6fb7-7f32-a862-351aaf482baf
+drwxr-xr-x    3 user  staff    96 Nov 14 16:12 01a1d9a6-6c8a-70a0-91db-ab43edd8eba9
+drwxr-xr-x    3 user  staff    96 Nov 14 16:12 01a1d9a5-d950-73f1-b601-a51baff79426
+drwxr-xr-x    3 user  staff    96 Nov 14 16:12 01a1d9a5-dead-74b1-89b2-27a11001d093
+drwxr-xr-x    3 user  staff    96 Nov 14 16:12 01a1d9a5-e009-7ab1-8b45-45048569d541
+drwxr-xr-x    3 user  staff    96 Nov 14 16:12 01a1d9a5-d6d3-7793-a037-e26efc2901e6
+drwxr-xr-x    3 user  staff    96 Nov 14 16:12 01a1d9a5-cbbe-7f33-ac19-a06e66863688
+drwxr-xr-x    3 user  staff    96 Nov 14 16:11 01a1d9a5-cecc-7693-ab5c-30058a0c8569
+drwxr-xr-x    3 user  staff    96 Nov 14 16:11 01a1d9a5-32c5-7b83-a7bb-b848a8cddfe2
+drwxr-xr-x    3 user  staff    96 Nov 14 16:11 01a1d9a5-32b4-7373-94e9-0cb01dde6b93
+drwxr-xr-x    3 user  staff    96 Nov 14 16:11 01a1d9a5-32a5-7442-81f9-5bb2e18c79f9
+drwxr-xr-x    3 user  staff    96 Nov 14 16:11 01a1d9a5-32c7-7620-9418-de6abcf7f34e
+drwxr-xr-x    3 user  staff    96 Nov 14 16:11 01a1d9a5-32c5-7811-8679-3539e89c778f
+drwxr-xr-x    3 user  staff    96 Nov 14 16:11 01a1d9a5-32dc-72f2-9f36-555ae3e0a41f
+drwxr-xr-x    3 user  staff    96 Nov 14 16:10 01a1d9a4-72c4-72a3-9401-e1479bb13848
+drwxr-xr-x    3 user  staff    96 Nov 14 16:10 01a1d9a4-7303-7f70-a92e-92fdac2feac2
+drwxr-xr-x    3 user  staff    96 Nov 14 16:10 01a1d9a4-3ac0-7072-ba0c-08286aa4b583
+drwxr-xr-x    3 user  staff    96 Nov 14 16:10 01a1d9a4-20be-7213-9d1e-c4c4410a2a23
+drwxr-xr-x    3 user  staff    96 Nov 14 16:09 01a1d9a3-e605-7bc1-b35d-2c5110f6fff5
+drwxr-xr-x    3 user  staff    96 Nov 14 16:09 01a1d9a3-e194-71b2-aa8c-504026258a28
+drwxr-xr-x    3 user  staff    96 Nov 14 16:09 01a1d9a3-ada6-7ed1-b658-e9f003290677
+drwxr-xr-x    3 user  staff    96 Nov 14 16:09 01a1d9a3-8b89-7681-bef5-68c4b6239efc
+drwxr-xr-x    3 user  staff    96 Nov 14 16:09 01a1d9a3-458b-70a0-b93d-972fa117683a
+drwxr-xr-x    3 user  staff    96 Nov 14 16:09 01a1d9a3-51d9-7232-99ce-b86955add9a4
+drwxr-xr-x    3 user  staff    96 Nov 14 16:09 01a1d9a3-1692-7043-af79-ea8afc299a0c
+drwxr-xr-x    3 user  staff    96 Nov 14 16:08 01a1d9a2-fd24-72d0-b0f9-65a9c456511f
+drwxr-xr-x    3 user  staff    96 Nov 14 16:08 01a1d9a2-b895-7b40-9fab-f1da63d1bf0b
+drwxr-xr-x    3 user  staff    96 Nov 14 16:08 01a1d9a2-b6b7-72c1-9b28-12268ce977fd
+drwxr-xr-x    3 user  staff    96 Nov 14 16:08 01a1d9a2-98d3-7a72-8fbb-7e40faef5dd2
+drwxr-xr-x    3 user  staff    96 Nov 14 16:08 01a1d9a2-54b0-7610-93e4-4585901e35d4
+drwxr-xr-x    3 user  staff    96 Nov 14 16:07 01a1d9a2-3211-7703-90aa-40ca1605f06c
+drwxr-xr-x    3 user  staff    96 Nov 14 16:07 01a1d9a2-214f-7fa1-9d1b-36804d9e5ef4
+drwxr-xr-x    3 user  staff    96 Nov 14 16:07 01a1d9a1-f158-7ce1-9411-0fe12670e460
+drwxr-xr-x    3 user  staff    96 Nov 14 16:07 01a1d9a1-c227-7831-b145-5b50b8865daa
+drwxr-xr-x    3 user  staff    96 Nov 14 16:07 01a1d9a1-90d3-77f0-bc9d-e698211c582a
+drwxr-xr-x    3 user  staff    96 Nov 14 16:07 01a1d9a1-7576-7f70-a9f0-b16888a4e36d
+drwxr-xr-x    3 user  staff    96 Nov 14 16:07 01a1d9a1-4d97-7bb2-af06-e9f1572a966f
+drwxr-xr-x    3 user  staff    96 Nov 14 16:06 01a1d9a1-33c1-7913-abfd-502ffd7060bd
+drwxr-xr-x    3 user  staff    96 Nov 14 16:06 01a1d9a0-f8cb-7790-835a-c5b6a71ac1bb
+drwxr-xr-x    3 user  staff    96 Nov 14 16:06 01a1d9a0-de2c-7a10-bd97-9a54355f7802
+drwxr-xr-x    3 user  staff    96 Nov 14 16:06 01a1d9a0-a568-71b2-9629-d56f24c78ee3
+drwxr-xr-x    3 user  staff    96 Nov 14 16:06 01a1d9a0-9f6c-7bb3-8b13-1ba6eabab926
+drwxr-xr-x    3 user  staff    96 Nov 14 16:06 01a1d9a0-51e2-7502-80ae-cf52ab53a4df
+drwxr-xr-x    3 user  staff    96 Nov 14 16:05 01a1d9a0-3384-75d1-81c9-43d692bee61f
+drwxr-xr-x    3 user  staff    96 Nov 14 16:05 01a1d9a0-0d31-7ea3-8965-d946f240fc9d
+drwxr-xr-x    3 user  staff    96 Nov 14 16:05 01a1d9a0-1a75-7df0-a791-9810da92fa64
+drwxr-xr-x    3 user  staff    96 Nov 14 16:05 01a1d99f-acef-71e0-b2cc-a7d00f5abc67
+drwxr-xr-x    3 user  staff    96 Nov 14 16:05 01a1d99f-99e2-7110-8d5d-7a47e125e9bb
+drwxr-xr-x    3 user  staff    96 Nov 14 16:05 01a1d99f-767e-75e2-b451-a79b4471a912
+drwxr-xr-x    3 user  staff    96 Nov 14 16:05 01a1d99f-8083-7662-b731-26d48fe9eb5a
+drwxr-xr-x    3 user  staff    96 Nov 14 16:04 01a1d99f-2962-7d40-a5eb-7bc5ef2a9927
+drwxr-xr-x    3 user  staff    96 Nov 14 16:04 01a1d99f-0b8d-7d71-a1bb-fc6e6719d5fa
+drwxr-xr-x    3 user  staff    96 Nov 14 16:04 01a1d99e-dd85-7103-9654-52509707da07
+drwxr-xr-x    3 user  staff    96 Nov 14 16:04 01a1d99e-d6e8-7550-a3ae-598b5c10c634
+drwxr-xr-x    3 user  staff    96 Nov 14 16:04 01a1d99e-a6dd-7622-be54-b04e04b18a0a
+drwxr-xr-x    3 user  staff    96 Nov 14 16:03 01a1d99e-6881-7ad3-ae10-c616d78d6964
+drwxr-xr-x    3 user  staff    96 Nov 14 16:03 01a1d99e-386c-7932-aa46-4967b379a37d
+drwxr-xr-x    3 user  staff    96 Nov 14 16:03 01a1d99e-49da-70c3-8b7a-d91444539fa1
+drwxr-xr-x    3 user  staff    96 Nov 14 16:03 01a1d99e-0908-7ff0-8a73-076ae9f93995
+drwxr-xr-x    3 user  staff    96 Nov 14 16:03 01a1d99d-d893-71c0-b133-d8e3a472a99d
+drwxr-xr-x    3 user  staff    96 Nov 14 16:03 01a1d99d-cbb3-7933-9fcf-4e62299a2ffc
+drwxr-xr-x    3 user  staff    96 Nov 14 16:03 01a1d99d-b602-74f0-b14e-02fc7648346d
+drwxr-xr-x    3 user  staff    96 Nov 14 16:02 01a1d99d-57f4-7ce2-a5c7-d0be3cfc0f97
+drwxr-xr-x    3 user  staff    96 Nov 14 16:02 01a1d99d-44c5-7220-872a-91341bd0f343
+drwxr-xr-x    3 user  staff    96 Nov 14 16:02 01a1d99d-28c4-7761-932e-5e169767d9f7
+drwxr-xr-x    3 user  staff    96 Nov 14 16:02 01a1d99d-2300-7020-ac74-75ee0e18ab44
+drwxr-xr-x    3 user  staff    96 Nov 14 16:02 01a1d99c-bd7e-7682-939c-5e8579bcf4b6
+drwxr-xr-x    3 user  staff    96 Nov 14 16:02 01a1d99c-bd00-7870-8e2e-936a3e166223
+drwxr-xr-x    3 user  staff    96 Nov 14 16:01 01a1d99c-8981-7771-aa65-b78da6f8a6e6
+drwxr-xr-x    3 user  staff    96 Nov 14 16:01 01a1d99c-7ad2-76e0-af59-77e6186a1032
+drwxr-xr-x    3 user  staff    96 Nov 14 16:01 01a1d99c-2dba-7ad1-a705-c26a9b651ab0
+drwxr-xr-x    3 user  staff    96 Nov 14 16:01 01a1d99c-23fb-75e3-b2d6-f998aace07cc
+drwxr-xr-x    3 user  staff    96 Nov 14 16:01 01a1d99b-ff99-7f83-b45e-a7122938ac29
+drwxr-xr-x    3 user  staff    96 Nov 14 16:01 01a1d99b-f365-7c02-9f0e-d5bb826cb847
+drwxr-xr-x    3 user  staff    96 Nov 14 16:00 01a1d99b-8fcb-7082-a869-428d5ad129f0
+drwxr-xr-x    3 user  staff    96 Nov 14 16:00 01a1d99b-8486-7092-8f1b-c829eef39925
+drwxr-xr-x    3 user  staff    96 Nov 14 16:00 01a1d99b-6329-7c13-81f0-751bfc328d6f
+drwxr-xr-x    3 user  staff    96 Nov 14 16:00 01a1d99b-5d09-79e3-bd57-e837df4d6930
+drwxr-xr-x    3 user  staff    96 Nov 14 16:00 01a1d99a-dd58-7672-ba13-6e27b44185bb
+drwxr-xr-x    3 user  staff    96 Nov 14 16:00 01a1d99a-e0cf-7bb3-af80-d4e2059c926d
+drwxr-xr-x    3 user  staff    96 Nov 14 15:59 01a1d99a-c2c3-7412-bfc7-42125cca6aa3
+drwxr-xr-x    3 user  staff    96 Nov 14 15:59 01a1d99a-b46d-76e0-b5e2-36727c3f1916
+drwxr-xr-x    3 user  staff    96 Nov 14 15:59 01a1d99a-451c-7001-9383-adaa1b514e92
+drwxr-xr-x    3 user  staff    96 Nov 14 15:59 01a1d99a-34cc-7db1-9a53-29d546668ffe
+drwxr-xr-x    3 user  staff    96 Nov 14 15:59 01a1d99a-268e-75c3-a7ee-c16e77eb5aea
+drwxr-xr-x    3 user  staff    96 Nov 14 15:59 01a1d99a-2e07-7621-8811-0f517200ce87
+drwxr-xr-x    3 user  staff    96 Nov 14 15:58 01a1d999-9f99-73e3-ac31-797d58441957
+drwxr-xr-x    3 user  staff    96 Nov 14 15:58 01a1d999-987c-7f70-8c31-bd5f5aa6983c
+drwxr-xr-x    3 user  staff    96 Nov 14 15:58 01a1d999-953b-7eb0-9989-2c1b2e34c766
+drwxr-xr-x    3 user  staff    96 Nov 14 15:58 01a1d999-a016-7cf2-93e1-314b498cffa8
+drwxr-xr-x    3 user  staff    96 Nov 14 15:58 01a1d999-072c-7441-b7be-c52f6a9057b1
+drwxr-xr-x    3 user  staff    96 Nov 14 15:58 01a1d999-072c-70c1-a66d-5cea9c084f16
+drwxr-xr-x    3 user  staff    96 Nov 14 15:57 01a1d999-072d-7f72-bb61-ea403072c29a
+drwxr-xr-x    3 user  staff    96 Nov 14 15:57 01a1d999-072d-76a3-a771-41e779d1f5e1
+drwxr-xr-x    3 user  staff    96 Nov 14 15:56 01a1d997-d91e-7611-9514-814c8f87ea60
+drwxr-xr-x    3 user  staff    96 Nov 14 09:03 01a1d81d-5436-7081-9da5-dd2b39a0a3e6
+drwxr-xr-x    3 user  staff    96 Nov 14 09:03 01a1d81d-5437-7f20-81eb-2f3bd51888e5
+drwxr-xr-x    3 user  staff    96 Nov 13 11:55 01a1d393-917d-7c63-b157-8dcc41a3416a
+drwxr-xr-x    3 user  staff    96 Nov 13 11:55 01a1d393-917d-7121-b3f2-638a0733dc6a
+drwxr-xr-x    3 user  staff    96 Nov 13 11:55 01a1d393-914d-7af3-82c6-6ffd0cdbf195
+drwxr-xr-x    3 user  staff    96 Nov 13 11:55 01a1d393-914d-7281-8fb2-7f6ceb3280d1
+drwxr-xr-x    3 user  staff    96 Nov 13 11:55 01a1d393-917d-7d50-8800-0b76104c915e
+drwxr-xr-x    3 user  staff    96 Nov 13 11:55 01a1d393-914d-7322-baf7-4b9c9a697b30
+drwxr-xr-x    5 user  staff   160 Nov 12 22:54 01a1d0c6-593d-7e43-9bfc-693921fabab2
+drwxr-xr-x    4 user  staff   128 Nov 12 22:54 01a1d0c6-5943-7d21-89d9-2a2b072090d4
+drwxr-xr-x    5 user  staff   160 Nov 12 22:53 01a1d0c6-5916-7be3-91dc-726022b1a45e
+drwxr-xr-x    4 user  staff   128 Nov 12 22:53 01a1d0c6-592b-7e72-b61a-db17b0df610e
+drwxr-xr-x    5 user  staff   160 Nov 12 22:53 01a1d0c6-593d-7aa1-aec1-0357c6b4af3c
+drwxr-xr-x    4 user  staff   128 Nov 12 22:53 01a1d0c6-593d-74f1-8a10-6db5b62c2029
+drwxr-xr-x    4 user  staff   128 Nov 12 22:52 01a1d0c6-5942-7923-af86-def62350af2f
+drwxr-xr-x    3 user  staff    96 Nov 12 22:52 01a1d0c6-5916-7352-8f94-46a4e9d8dec7
+drwxr-xr-x    5 user  staff   160 Nov 12 22:48 01a1d0c0-d2dd-7f73-9c54-670403e31782
+drwxr-xr-x    6 user  staff   192 Nov 12 22:47 01a1d0c0-d2dd-7001-9fd4-e960b59a7dca
+drwxr-xr-x    5 user  staff   160 Nov 12 22:46 01a1d0c0-d2da-7333-8885-6fb1f89bcf6d
+drwxr-xr-x    3 user  staff    96 Nov 12 22:45 01a1d0c0-d2dc-70c3-b3c3-d0e0dfc1b1cc
+drwxr-xr-x    4 user  staff   128 Nov 12 21:25 01a1d077-a54e-7e30-a58f-a4645670ab1d
+drwxr-xr-x    4 user  staff   128 Nov 12 21:25 01a1d077-a54f-7de0-9282-91d9e0d8c9c8
+drwxr-xr-x    3 user  staff    96 Nov 12 21:25 01a1d077-a54f-7e42-abd7-a7d308f34123
+drwxr-xr-x    3 user  staff    96 Nov 12 21:25 01a1d077-a54f-7bb0-ba87-d04c94caebc1
+drwxr-xr-x    4 user  staff   128 Nov 12 21:12 01a1d06b-0274-7600-98d8-a5fdf69b4513
+drwxr-xr-x    3 user  staff    96 Nov 12 21:11 01a1d06b-0275-7e42-a6ef-bcad6d8d9f3f
+drwxr-xr-x    4 user  staff   128 Nov 12 21:00 01a1d060-4f2c-77f0-84d3-dc901a147464
+drwxr-xr-x    4 user  staff   128 Nov 12 20:57 01a1d05d-837c-7121-b4de-a3e3e50dea86
+drwxr-xr-x    4 user  staff   128 Nov 12 20:57 01a1d05d-8382-7002-bee9-cb81a028785c
+drwxr-xr-x    4 user  staff   128 Nov 12 20:57 01a1d05d-8380-7392-aab1-bad2342d8236
+drwxr-xr-x    4 user  staff   128 Nov 12 20:34 01a1d047-ab76-7bd0-8b8e-041ad7094dc7
+drwxr-xr-x    5 user  staff   160 Nov 12 20:34 01a1d047-ab77-7352-a1ab-8a007b064849
+drwxr-xr-x    3 user  staff    96 Nov 12 20:33 01a1d047-ab76-7b60-9021-7faee10a78d6
+drwxr-xr-x    3 user  staff    96 Nov 12 20:31 01a1d045-6332-72e3-903b-506b99829b0a
+drwxr-xr-x    3 user  staff    96 Nov 12 20:27 01a1d042-423c-7d43-9ce6-b2b6839e1224
+drwxr-xr-x    3 user  staff    96 Nov 12 20:22 01a1d03c-b0af-7ab3-8a66-442c49c540b5
+drwxr-xr-x    4 user  staff   128 Nov 12 20:20 01a1d03b-c7e1-7a53-8073-a19609e5335b
+drwxr-xr-x    4 user  staff   128 Nov 12 20:20 01a1d03b-c83d-7bf1-afc8-9b142c6ee902
+drwxr-xr-x    3 user  staff    96 Nov 12 20:20 01a1d03b-c865-7513-8622-1a3a0c4c815b
+drwxr-xr-x    4 user  staff   128 Nov 12 20:20 01a1d03b-c876-7032-b9eb-c8d999456c2a
+drwxr-xr-x    3 user  staff    96 Nov 12 20:20 01a1d03b-c7e5-72c1-b57d-66a6500d821d
+drwxr-xr-x    3 user  staff    96 Nov 12 20:19 01a1d03b-c81c-74c1-baee-c7d6fcd762a8
+drwxr-xr-x    4 user  staff   128 Nov 12 20:14 01a1d035-cdba-7503-a119-e54592244560
+drwxr-xr-x    4 user  staff   128 Nov 12 20:14 01a1d035-cdb9-7e93-baf8-44a46575c18c
+drwxr-xr-x    3 user  staff    96 Nov 12 20:14 01a1d035-cdb9-7d33-b17e-8fdc907131bf
+drwxr-xr-x    3 user  staff    96 Nov 12 17:21 01a1cf97-f40f-71d2-8ece-8cd8a414c59f
+drwxr-xr-x    4 user  staff   128 Nov 12 17:11 01a1cf8e-2329-7d02-b288-909463443bef
+drwxr-xr-x    3 user  staff    96 Nov 12 17:03 01a1cf87-fa02-7ef1-bd3e-a052f7b6b097
+drwxr-xr-x    3 user  staff    96 Nov 12 16:53 01a1cf7e-54c5-7f62-9a39-092bf8d8fe2e
+drwxr-xr-x    3 user  staff    96 Nov 12 16:40 01a1cf72-db1a-75a0-a375-9982049ad9ab
+drwxr-xr-x    4 user  staff   128 Nov 12 16:37 01a1cf6e-c81c-7333-9166-30b55946914d
+drwxr-xr-x    4 user  staff   128 Nov 12 16:36 01a1cf6e-c81e-7442-9cf4-78ffd860cf1b
+drwxr-xr-x    3 user  staff    96 Nov 12 16:36 01a1cf6e-c81c-7d31-83b3-619951e2acbd
+drwxr-xr-x    3 user  staff    96 Nov 12 16:36 01a1cf6e-c81f-76a1-ac54-92830da1db25
+drwxr-xr-x    3 user  staff    96 Nov 12 16:36 01a1cf6e-c81b-78e0-a4d8-e959635cbb38
+drwxr-xr-x    3 user  staff    96 Nov 12 16:36 01a1cf6e-c81b-7c32-9b21-b35dfe4caacc
+drwxr-xr-x    4 user  staff   128 Nov 12 16:34 01a1cf6c-4a45-7542-b042-ab7290494e51
+drwxr-xr-x    3 user  staff    96 Nov 12 16:33 01a1cf6c-4a40-7913-a1cc-bbddaec5c2d8
+drwxr-xr-x    3 user  staff    96 Nov 12 16:33 01a1cf6c-4a4a-7c90-b7ce-b21e0ac32a2d
+drwxr-xr-x    3 user  staff    96 Nov 12 16:33 01a1cf6c-4a3f-7c82-a72f-6d0ddd81358a
+drwxr-xr-x    4 user  staff   128 Nov 12 16:22 01a1cf60-ce2f-7661-a6a8-8102daadb1c5
+drwxr-xr-x    3 user  staff    96 Nov 12 16:21 01a1cf61-6ef7-77e0-a4fd-5aa930eb303a
+drwxr-xr-x    3 user  staff    96 Nov 12 13:22 01a1cebd-db14-76b3-890f-b39fd7457884
+drwxr-xr-x    4 user  staff   128 Nov 12 13:16 01a1ceb6-f7e9-78c2-bf44-9c7d360689c3
+drwxr-xr-x    4 user  staff   128 Nov 12 13:16 01a1ceb6-f7ea-7920-8917-20b008e3abdc
+drwxr-xr-x    4 user  staff   128 Nov 12 13:16 01a1ceb6-f7eb-70f2-996b-22ee52ca1365
+drwxr-xr-x    4 user  staff   128 Nov 12 13:16 01a1ceb6-f7f0-7a72-9501-acc727ca9e54
+drwxr-xr-x    3 user  staff    96 Nov 12 13:15 01a1ceb6-f7ed-7170-b8e5-a787eaadbbe3
+drwxr-xr-x    4 user  staff   128 Nov 12 12:52 01a1cea1-9ab5-7b82-a80a-27f3a99c4e55
+drwxr-xr-x    4 user  staff   128 Nov 12 12:52 01a1cea1-9a8d-7720-9fb0-767d484ee7ee
+drwxr-xr-x    3 user  staff    96 Nov 12 12:52 01a1cea1-9a8d-7231-8fcb-e5917be54e0a
+drwxr-xr-x    3 user  staff    96 Nov 12 12:51 01a1cea1-9a8d-7f83-92fe-7a85ba961d7d
+drwxr-xr-x    4 user  staff   128 Nov 12 12:37 01a1ce94-351f-71d1-b652-35d6c3844854
+drwxr-xr-x    4 user  staff   128 Nov 12 12:36 01a1ce92-f1ad-7f70-8992-a405a9b85b90
+drwxr-xr-x    3 user  staff    96 Nov 12 12:27 01a1ce8b-38f1-7d62-a064-2aba30a7adc6
+drwxr-xr-x    3 user  staff    96 Nov 12 12:27 01a1ce8b-38f2-7a40-ac1d-c3689ccbf696
+drwxr-xr-x    3 user  staff    96 Nov 12 12:27 01a1ce8b-38f2-7903-a860-7496a3a75519
+drwxr-xr-x    3 user  staff    96 Nov 12 12:27 01a1ce8b-38f3-75b1-9ac7-61513f561d5c
+drwxr-xr-x    3 user  staff    96 Nov 12 12:27 01a1ce8b-38f1-7d63-879f-ed97f79229bd
+drwxr-xr-x    3 user  staff    96 Nov 12 12:27 01a1ce8b-38f2-7753-bfc7-944184a21ef6
+drwxr-xr-x    4 user  staff   128 Nov 12 11:30 01a1ce55-8261-71b3-a7c3-f6874845560b
+drwxr-xr-x    4 user  staff   128 Nov 12 11:29 01a1ce55-8266-7a81-b696-36f5bebea3f6
+drwxr-xr-x    4 user  staff   128 Nov 12 11:29 01a1ce55-8262-7ae0-b4f6-84b833aef27d
+drwxr-xr-x    4 user  staff   128 Nov 12 11:29 01a1ce55-8279-7cd0-9e7a-ec137441743f
+drwxr-xr-x    3 user  staff    96 Nov 12 11:28 01a1ce55-8278-7391-ad4c-b9275802d3bb
+drwxr-xr-x    3 user  staff    96 Nov 12 11:28 01a1ce55-8264-7c52-9c4f-b5ee6fd2a9b1
+drwxr-xr-x    3 user  staff    96 Nov 12 11:28 01a1ce55-8262-7a11-8791-dc61f0f9e82a
+drwxr-xr-x    3 user  staff    96 Nov 12 11:28 01a1ce55-8261-75e0-9e20-f86a0221f302
+drwxr-xr-x    3 user  staff    96 Nov 12 09:39 01a1cdf1-0c93-7771-b479-0f3fa56857d0
+drwxr-xr-x    3 user  staff    96 Nov 12 08:14 01a1cd9f-73b9-7100-a310-b9e6f26ef500
+drwxr-xr-x    3 user  staff    96 Nov 12 08:10 01a1cd9f-733b-7231-b782-d6b02b9ee366
+drwxr-xr-x    3 user  staff    96 Nov 12 08:10 01a1cd9f-733b-7ed2-88ab-f1397fbb7aee
+drwxr-xr-x    3 user  staff    96 Nov 12 08:10 01a1cd9f-7379-7cb0-bb27-00c43ff4245c
+drwxr-xr-x    3 user  staff    96 Nov 12 08:10 01a1cd9f-7394-7f70-9c0f-285deca7e382
+drwxr-xr-x    3 user  staff    96 Nov 12 08:10 01a1cd9f-73e0-7ac1-a170-99c81c192c38
+drwxr-xr-x    3 user  staff    96 Nov 12 08:10 01a1cd9f-7339-74a2-93c5-40691141ad4e
+drwxr-xr-x    3 user  staff    96 Nov 12 08:10 01a1cd9f-743f-7a00-8737-70da44c5301f
+drwxr-xr-x    3 user  staff    96 Nov 12 08:10 01a1cd9f-73a3-74d3-9f92-3ee539bcbba1
+drwxr-xr-x    3 user  staff    96 Nov 12 08:10 01a1cd9f-73bd-7ea3-b1af-daf9ccd6dc6a
+drwxr-xr-x    3 user  staff    96 Nov 12 08:09 01a1cd9f-737c-7930-9531-e91bce78855f
+drwxr-xr-x    3 user  staff    96 Nov 12 08:09 01a1cd9f-73c7-7d73-9b60-91db3cb7fda4
+drwxr-xr-x    3 user  staff    96 Nov 12 08:09 01a1cd9f-7382-7023-a80b-256c2bc38ee0
+drwxr-xr-x    3 user  staff    96 Nov 12 08:09 01a1cd9f-7379-7e13-8982-2a85b48c30b4
+drwxr-xr-x    3 user  staff    96 Nov 12 08:08 01a1cd9e-6578-7f93-baca-e4d8354856fb
+drwxr-xr-x    3 user  staff    96 Nov 12 08:07 01a1cd9d-0e26-7492-8875-44169071daa4
+drwxr-xr-x    3 user  staff    96 Nov 12 08:07 01a1cd9d-0ec9-7aa3-847e-0d9e8c753f26
+drwxr-xr-x    3 user  staff    96 Nov 12 08:07 01a1cd9d-0e37-7ad2-b604-dbb295126d49
+drwxr-xr-x    3 user  staff    96 Nov 12 08:07 01a1cd9d-0e2a-7a70-9c02-2535fe890b13
+drwxr-xr-x    3 user  staff    96 Nov 12 08:07 01a1cd9d-0e2a-7162-a45f-2311370b733b
+drwxr-xr-x    3 user  staff    96 Nov 12 08:07 01a1cd9d-0eac-72a0-92dc-ebcce176202e
+drwxr-xr-x    3 user  staff    96 Nov 12 08:07 01a1cd9d-0ecc-7f00-9de7-59afc8338582
+drwxr-xr-x    3 user  staff    96 Nov 12 08:07 01a1cd9d-0e34-7423-987c-dc7276b27e31
+drwxr-xr-x    3 user  staff    96 Nov 12 08:07 01a1cd9d-0e35-7010-b147-daf3a8a1a6b2
+drwxr-xr-x    3 user  staff    96 Nov 12 08:07 01a1cd9d-0e72-79c0-b284-589b8e8fdad5
+drwxr-xr-x    3 user  staff    96 Nov 12 08:07 01a1cd9d-0e71-7971-9ebe-0187d8740ec2
+drwxr-xr-x    3 user  staff    96 Nov 12 08:07 01a1cd9d-0e3c-7133-bce7-8ef4d83fd92e
+drwxr-xr-x    3 user  staff    96 Nov 12 08:07 01a1cd9d-0e36-7ed2-97ab-027ac3b36178
+drwxr-xr-x    3 user  staff    96 Nov 12 08:07 01a1cd9d-0e79-71b3-a532-3312241cd971
+drwxr-xr-x    3 user  staff    96 Nov 12 08:05 01a1cd9b-efcc-75d1-a603-3f61fc035925
+drwxr-xr-x    6 user  staff   192 Nov 12 00:36 01a1cbfe-7c5d-7cd0-b73f-3c84a1c1688a
+drwxr-xr-x    6 user  staff   192 Nov 12 00:36 01a1cbfe-7c5d-7f73-adef-795d9829a6dd
+drwxr-xr-x    6 user  staff   192 Nov 12 00:24 01a1cbf2-6399-7401-b912-5dc723a0874b
+drwxr-xr-x    7 user  staff   224 Nov 12 00:23 01a1cbf2-6399-7912-9a67-77d32b72fd82
+drwxr-xr-x    9 user  staff   288 Nov 11 19:26 01a1cadd-18da-7f62-bac5-7c90409eb24f
+drwxr-xr-x    6 user  staff   192 Nov 11 19:24 01a1cadd-18da-7402-9cad-fcdeaf57c1e0
+drwxr-xr-x    3 user  staff    96 Nov 11 19:24 01a1cae1-ab4c-72f3-b3d7-922a05cbdd27
+drwxr-xr-x    3 user  staff    96 Nov 11 19:23 01a1cae1-ab4c-7ce2-a257-0b614dab68e3
+drwxr-xr-x    7 user  staff   224 Nov 11 18:43 01a1cab9-1109-7a03-b2d1-3e4f5ddc87ae
+drwxr-xr-x    6 user  staff   192 Nov 11 18:42 01a1cab9-1109-7212-b7dc-695276e6249b
+drwxr-xr-x    7 user  staff   224 Nov 11 18:42 01a1cab9-1109-7b01-9ce2-3a9a4e31be8a
+drwxr-xr-x   11 user  staff   352 Nov 11 18:18 01a1ca9c-8a4e-7d43-bc0c-7664e98316a6
+drwxr-xr-x    9 user  staff   288 Nov 11 18:15 01a1ca9c-8a4e-7100-9ed8-d1234e684975
+drwxr-xr-x    8 user  staff   256 Nov 11 18:14 01a1ca9c-8a4d-73b1-b301-e956c09d6202
+drwxr-xr-x    8 user  staff   256 Nov 11 18:13 01a1ca9c-8a4f-7002-aa7a-f71ce4bff081
+drwxr-xr-x    7 user  staff   224 Nov 11 18:12 01a1ca9c-8a4e-77b2-a39b-bd07fb0820f6
+drwxr-xr-x    8 user  staff   256 Nov 11 18:06 01a1ca97-63e1-7e52-9402-1ddfa9971f3c
+drwxr-xr-x    3 user  staff    96 Nov 11 16:55 01a1ca5a-a746-7071-bf9d-ea7f52a56dd7
+drwxr-xr-x    4 user  staff   128 Nov 11 16:54 01a1ca58-dcbb-7901-9bda-1ff3be751143
+drwxr-xr-x    3 user  staff    96 Nov 11 16:20 01a1ca39-d89c-7d90-a2d7-5e75f43c1dd7
+drwxr-xr-x    3 user  staff    96 Nov 11 16:20 01a1ca39-e875-7030-b630-3d107c84dbf2
+drwxr-xr-x    3 user  staff    96 Nov 11 16:20 01a1ca39-d109-7201-8de6-0f9b5f2aac7b
+drwxr-xr-x    3 user  staff    96 Nov 11 16:20 01a1ca39-f7c7-7522-871a-7500964eedd9
+drwxr-xr-x    3 user  staff    96 Nov 11 16:20 01a1ca39-f00d-7aa1-b0b4-191ffcf6c0af
+drwxr-xr-x    3 user  staff    96 Nov 11 16:20 01a1ca39-e026-7921-9e27-e88d3ff66c54
+drwxr-xr-x    3 user  staff    96 Nov 11 16:18 01a1ca37-e7fa-7dc2-b758-dc8927fc6411
+drwxr-xr-x    3 user  staff    96 Nov 11 16:18 01a1ca37-e7cb-7d61-b1b4-8dc2cae8d938
+drwxr-xr-x    3 user  staff    96 Nov 11 13:59 01a1c9b8-de8e-7911-a11f-bfc287751332
+drwxr-xr-x    3 user  staff    96 Nov 11 13:57 01a1c9b7-bad4-7913-9911-44a5c1837aa3
+drwxr-xr-x    3 user  staff    96 Nov 11 13:56 01a1c9b6-ef66-7500-90c4-2c3c0d90d623
+drwxr-xr-x    3 user  staff    96 Nov 11 13:56 01a1c9b6-05f2-71b3-8545-b512347a07ec
+drwxr-xr-x    3 user  staff    96 Nov 11 13:54 01a1c9b4-8e7f-7e81-8442-38272e8daf72
+drwxr-xr-x    3 user  staff    96 Nov 11 13:53 01a1c9b3-9739-7520-bc88-9ffb210c6567
+drwxr-xr-x    3 user  staff    96 Nov 11 13:52 01a1c9b2-eb48-75d3-96bb-cf93cc05c19e
+drwxr-xr-x    3 user  staff    96 Nov 11 13:51 01a1c9b1-ec4a-7de3-b63a-327017aa9bf0
+drwxr-xr-x    3 user  staff    96 Nov 11 13:50 01a1c9b1-4171-7b70-9e10-c15571a1a08c
+drwxr-xr-x    3 user  staff    96 Nov 11 13:49 01a1c9b0-805c-7023-8057-bd74265f922f
+drwxr-xr-x    3 user  staff    96 Nov 11 13:48 01a1c9af-346b-7fe1-a009-4450c4b20e99
+drwxr-xr-x    3 user  staff    96 Nov 11 13:47 01a1c9ae-58dc-7e81-88a5-71ee69c3e8da
+drwxr-xr-x    3 user  staff    96 Nov 11 13:46 01a1c9ad-8ba8-70a3-8269-346aaa63b6d4
+drwxr-xr-x    3 user  staff    96 Nov 11 13:45 01a1c9ac-d8ec-7942-9f94-998ee71f5ce0
+drwxr-xr-x    3 user  staff    96 Nov 11 13:45 01a1c9ac-205d-7da0-a10c-e590f3782bd2
+drwxr-xr-x    3 user  staff    96 Nov 11 13:44 01a1c9ab-7289-7b01-84e7-8cc4ac5f7fca
+drwxr-xr-x   23 user  staff   736 Nov  6 19:30 01a1b0f3-275b-7a21-949d-e0f86f4a5fc3
+drwxr-xr-x   36 user  staff  1152 Nov  6 14:58 01a1a7dd-0aaa-7ea3-a319-ef66ea4709a7
+drwxr-xr-x    7 user  staff   224 Nov  6 12:53 01a1a4b2-3b27-7113-bb6b-af391ed36819
+drwxr-xr-x    9 user  staff   288 Nov  5 00:18 01a1a7de-0665-76a2-ab15-7b5f7bc0e228
+drwxr-xr-x    9 user  staff   288 Nov  5 00:18 01a1a7dd-dfe6-7502-b1f8-e4dae2b02be7
+drwxr-xr-x    9 user  staff   288 Nov  5 00:17 01a1a7dd-bb28-7861-800d-1547e0f20e62
+drwxr-xr-x   32 user  staff  1024 Nov  4 21:44 01a1a5b9-d33b-76c0-b41f-848f9ffe8061
+drwxr-xr-x   39 user  staff  1248 Nov  3 15:46 01a1a0cc-f9ed-76a1-bb5c-8c8042ffa272
+drwxr-xr-x   10 user  staff   320 Oct 15 10:14 01a13d96-04e8-70c0-8574-fe0b8f2ec542
+drwxr-xr-x    4 user  staff   128 Oct 13 00:01 01a1315a-a8fd-7ed2-b4d7-7f7a8a599ccd
+drwxr-xr-x   37 user  staff  1184 Oct  8 12:37 01a1195c-78e1-78a0-addc-263e02796b97
+drwxr-xr-x  141 user  staff  4512 Oct  7 10:45 01a10f68-7206-7913-9af6-222232e29be1
+drwxr-xr-x    3 user  staff    96 Sep 11 05:40 01a08da3-c04d-7d31-9fb4-cbaafc38f5ea
+drwxr-xr-x    6 user  staff   192 Sep  7 03:42 01a078c4-ac91-78f0-9672-630b718bccb1
+drwxr-xr-x@   3 user  staff    96 Aug 31 22:36 01a058b0-a1ec-7cd2-a6bc-1ca01bb787e9
+drwxr-xr-x   11 user  staff   352 Aug 29 23:55 01a04e58-0936-7bc1-afba-c956635f4566
+drwxr-xr-x    9 user  staff   288 Aug 18 19:29 01a014bf-cfa6-7eb3-86c9-c1a6976c16f5
+drwxr-xr-x@   9 user  staff   288 Aug 18 17:31 01a01407-a5db-7963-930a-9b2862dc51cc
+drwxr-xr-x    5 user  staff   160 Aug 13 09:33 019ff943-29a6-7943-a8f6-9d997db446cb
+drwxr-xr-x    4 user  staff   128 Aug  6 16:57 019fd276-9907-7c11-be0f-d091ff08396d
+drwxr-xr-x   21 user  staff   672 Aug  5 08:14 019fccd1-da68-74c2-8d43-e91229e6bf48
+drwxr-xr-x@   4 user  staff   128 Jul 28 15:36 019fa7aa-a3d8-7c52-9f49-9b6f33dcdd9e
+drwxr-xr-x@  37 user  staff  1184 Jul 27 11:47 019f9e5d-512f-75c2-b9b2-fec3e131e682
+
+codex
+The image is ready. I checked each supplied string; all text is correct and fully visible. I will now save the image and confirm its dimensions.
+exec
+/bin/zsh -lc 'cp /Users/user/.codex/generated_images/01a1f289-6313-71f1-af8a-aa630f339ede/exec-4a23d4bb-92b9-4a97-b35d-509e5c6c03cf.png e3b-get-app.png
+sips -g pixelWidth -g pixelHeight e3b-get-app.png' in /Users/user/wednesday/off-grid-ai/mobile/docs/review/onboarding-concepts/extension/concepts
+ succeeded in 102ms:
+/Users/user/wednesday/off-grid-ai/mobile/docs/review/onboarding-concepts/extension/concepts/e3b-get-app.png
+  pixelWidth: 1536
+  pixelHeight: 1024
+
+exec
+/bin/zsh -lc "python3 - <<'PY'
+from pathlib import Path
+import struct
+p=Path('e3b-get-app.png')
+data=p.read_bytes()
+assert data[:8] == b'\\x89PNG\\r\\n\\x1a\\n'
+assert struct.unpack('>II', data[16:24]) == (1536,1024)
+assert Path('prompts/e3b-get-app.png.txt').is_file()
+print('Verified: PNG, 1536 x 1024, prompt file saved.')
+PY" in /Users/user/wednesday/off-grid-ai/mobile/docs/review/onboarding-concepts/extension/concepts
+ succeeded in 21ms:
+Verified: PNG, 1536 x 1024, prompt file saved.
+
+codex
+Saved with built-in image generation:
+
+- [e3b-get-app.png](/Users/user/wednesday/off-grid-ai/mobile/docs/review/onboarding-concepts/extension/concepts/e3b-get-app.png)
+- [Exact prompt](/Users/user/wednesday/off-grid-ai/mobile/docs/review/onboarding-concepts/extension/concepts/prompts/e3b-get-app.png.txt)
+
+Verified 1536 × 1024 pixels. All supplied text is correct and fully visible.
+tokens used
+36,093
+Saved with built-in image generation:
+
+- [e3b-get-app.png](/Users/user/wednesday/off-grid-ai/mobile/docs/review/onboarding-concepts/extension/concepts/e3b-get-app.png)
+- [Exact prompt](/Users/user/wednesday/off-grid-ai/mobile/docs/review/onboarding-concepts/extension/concepts/prompts/e3b-get-app.png.txt)
+
+Verified 1536 × 1024 pixels. All supplied text is correct and fully visible.

@@ -80,6 +80,8 @@ android {
     compileSdk rootProject.ext.compileSdkVersion
 
     namespace "ai.offgridmobile"
+    // The bundled chat model ships in the app bundle as two fast-follow AI packs (../bundled-model.gradle).
+    assetPacks = [":chat_model", ":chat_mmproj"]
     // java.time on API 24. minSdk is 24, but Instant/Duration and friends only exist from API 26, so the
     // Kotlin sync modules (screenshot watcher, directory source, downloads) would throw NoSuchMethodError on
     // Android 7 - a crash, not a lint nag. Desugaring backports them instead of us hand-rolling date
@@ -179,6 +181,9 @@ dependencies {
     } else {
         implementation jscFlavor
     }
+
+    // Play AI packs: the state and location of the bundled chat model's packs (bundledmodel/).
+    implementation("com.google.android.play:ai-delivery:0.2.0-beta01")
 
     // Coroutines for async operations (used by LocalDreamModule)
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")

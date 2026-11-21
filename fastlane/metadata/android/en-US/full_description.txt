@@ -1,19 +1,49 @@
-Off Grid is a fully on-device AI assistant. Large language models run directly on your phone via llama.cpp and GGUF. No cloud, no account. Your chats and files never leave your device; anonymous usage data and crash reports only if you turn them on. Airplane-mode tested.
+Private AI on your Android phone. Make images and chat with AI, even with no signal. Off Grid AI runs local AI models on the phone itself, so it works as offline AI, even in airplane mode, and nothing you type leaves your phone.
 
-Capabilities:
+No account and no subscription. Download a model once and it is yours.
 
-* Chat with Llama 3.2, Qwen 3, Gemma 3, Phi-4, DeepSeek R1, and Mistral. Streaming responses, markdown rendering, "thinking mode" for reasoning models.
+AI IMAGE GENERATOR ON YOUR PHONE
+Type an idea and get a picture, drawn on your phone with Stable Diffusion models, not on a server. Off Grid AI writes the fuller prompt for you, and a live preview shows the picture while it renders. On phones with a supported NPU, images come out much faster. Make as many as you like, offline.
 
-* Voice input via on-device whisper.cpp. Hold to record, auto-transcribe. Audio never leaves your phone.
+CHAT, WRITE AND ASK
+Chat and write with open models such as Qwen, Gemma, Llama and Phi, or load your own GGUF file. Ask about your documents, point your camera at a receipt, and talk instead of typing.
 
-* Vision — point your camera and ask. Supports SmolVLM, Qwen-VL, Gemma 3n.
+VIDEO FROM ONE SENTENCE (PRO)
+Write "a red fox trotting through fresh snow" and Video Studio makes the clip. It runs on your phone's GPU or NPU, on your computer, or on your phone using your computer. Continue the shot, start a new one, or join shots into a story. To animate a photo, use the video models on your computer. Your photos stay on your own devices.
 
-* Document analysis. Attach PDFs, code, CSVs. Native PDF text extraction. No cloud parsing.
+POINT YOUR CAMERA AND ASK
+Photograph a receipt, a page or a sign. Ask "What's the total?" and get "$18.90, including $1.40 in tax."
 
-* Tool calling. Models that support function calling can use built-in tools — web search, calculator, date/time, knowledge-base search.
+ASK ABOUT YOUR WORK
+Put your documents in a Project and ask. "What did I promise Sam?" gets the three things you promised, and the answer names the files it came from.
 
-* Project knowledge bases. Upload PDFs and notes. Documents are chunked and embedded on-device with a bundled MiniLM model, retrieved via cosine similarity, all stored in local SQLite.
+TALK INSTEAD OF TYPING
+Record a voice note and get the words back as text, transcribed on your phone. With Pro, talk hands-free and it answers out loud.
 
-* Bring-your-own model. Sideload any GGUF file.
+IT USES TOOLS
+It can use a calculator, check the date, search your Projects, and search the web or read a page when you are online. Web search is the one tool that goes online, and you can turn it off.
 
-Built on llama.cpp, whisper.cpp, llama.rn, and whisper.rn — all standard FOSS components. MIT-licensed.
+A MODEL PICKED FOR YOUR PHONE
+Off Grid AI checks your phone's memory and picks a Fast, a Balanced and a Best model for it. One tap downloads a model and switches to it. Choose from open models such as Qwen, Gemma, Llama and Phi, search Hugging Face, or load your own GGUF file. On phones that support it, the GPU and NPU make models run faster.
+
+YOUR COMPUTER'S BIGGER MODELS, FREE
+Off Grid AI also runs on Mac, Windows and Linux. On the same Wi-Fi, your phone can use the larger models on your computer, including models you run in LM Studio or Ollama, for chat, images and video, at no cost. You can also connect to your own server.
+
+WHAT STAYS ON YOUR PHONE
+Your prompts, chats, documents, photos, voice notes and videos. The model runs in your phone's memory, so what you type is not sent to us or anyone else. The code is public on GitHub, so you can check.
+
+OFF GRID AI PRO
+Pro is an optional in-app purchase. It adds:
+- Video Studio: short clips and stories from a sentence
+- Hands-free voice: talk, and it answers out loud
+- Drafts you approve: it writes the message, and nothing goes out without your OK
+- Sync with Mac, Windows and Linux: chats, files and your clipboard follow you, encrypted, over your own Wi-Fi. No Off Grid AI server receives your synced content.
+- One Pro for up to 5 devices, phones and computers together
+
+DOWNLOADS SYNC (PRO, OPTIONAL)
+If you turn it on, Sync can send new files from your phone's Downloads folder to the devices you choose. This needs All files access, and Off Grid AI reads only the public Downloads folder. Files that were there before you turned it on are not sent. You can turn it off at any time.
+
+Works on Android 10 or later with 4 GB of RAM or more. Video needs more memory, and the app shows which video models fit your phone.
+
+Privacy policy: https://getoffgridai.co/privacy/
+Terms of use: https://getoffgridai.co/terms/

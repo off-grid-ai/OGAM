@@ -79,6 +79,11 @@ export function migratePersistedState<TState>(
   // Drop legacy download tracking fields. The unified downloadStore (backed
   // by the native Room DB) is now the source of truth. Persisted entries
   // from old versions are silently ignored on rehydrate.
+  // Picks saved by a newer or broken build fall back to none, so the app looks as it always did.
+  const picks = merged.onboardingPicks;
+  if (picks != null && !(Array.isArray(picks.groups) && Array.isArray(picks.parts))) {
+    merged.onboardingPicks = null;
+  }
   delete merged.downloadProgress;
   delete merged.activeBackgroundDownloads;
   delete merged.imageModelDownloading;

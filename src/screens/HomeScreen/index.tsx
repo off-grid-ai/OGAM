@@ -30,6 +30,7 @@ import { useHomeScreen, HomeScreenNavigationProp } from './hooks/useHomeScreen';
 import { RecentConversations } from './components/RecentConversations';
 import { LoadingOverlay } from './components/LoadingOverlay';
 import { DesktopPromoCard } from './components/DesktopPromoCard';
+import { HomePicks } from './components/HomePicks';
 import { FeatureShowcase, showcaseFeatures } from './components/FeatureShowcase';
 import { useIsProActive } from '../../hooks/useIsProActive';
 import { useOpenProTools } from '../../hooks/useOpenProTools';
@@ -135,6 +136,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
     handleUnloadImageModel,
     // Remote model handlers
     handleEjectAll,
+    canStartChat,
     startNewChat,
     continueChat,
     handleDeleteConversation,
@@ -317,12 +319,13 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
               <Text style={styles.subtitle} textBreakStrategy="balanced">
                 Your chats and files never leave your device.
               </Text>
-              {activeTextModelId || activeImageModelId || remoteLabels.video || videoLabel ? (
+              {/* The first chat model on its way counts: its chat opens now and answers when it arrives. */}
+              {canStartChat ? (
                 <Button
                   title="New chat"
                   variant="hero"
                   size="small"
-                  icon={<Icon name="plus" size={16} color={colors.onHero} />}
+                  icon={<Icon name="plus" size={16} color={colors.primary} />}
                   onPress={startNewChat}
                   style={styles.newChatButton}
                   testID="new-chat-button"
@@ -331,11 +334,15 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
             </View>
           </View>
 
-          {/* Still while a sheet covers Home: nothing moves where you cannot see it (hand test 89). */}
+          {/* What you can do always leads Home (Mac, 2026-11-18). Still while a sheet covers Home:
+              nothing moves where you cannot see it (hand test 89). */}
           <FeatureShowcase
             features={showcase}
             active={pickerType === null && !modelsManagerOpen && !whisperOpen && !voiceOpen}
           />
+
+          {/* What you picked in onboarding comes next, one tap from each. */}
+          <HomePicks />
 
           {/* Collapsed Models summary — tap to open the manager sheet. Both the
               text (1) and image (13) tour steps anchor here now. */}

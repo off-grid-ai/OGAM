@@ -4,7 +4,8 @@
     "App.tsx",
     "__tests__/**/*.{ts,tsx}",
     "pro/**/*.{ts,tsx}",
-    "scripts/lib/engines.js"
+    "scripts/lib/engines.js",
+    "preview/index.js"
   ],
   "project": [
     "src/**/*.{ts,tsx}",
@@ -28,6 +29,8 @@
     "@babel/preset-env",
     "@babel/runtime",
     "sonar-scanner",
-    "babel-plugin-istanbul"
+    "babel-plugin-istanbul",
+    "react-native-web",
+    "react-dom"
   ]
 }

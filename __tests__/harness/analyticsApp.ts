@@ -90,10 +90,11 @@ export async function launchApp(options: {
   return { boundary, endpoint, rtl, view };
 }
 
-/** A new user: Onboarding → Auto Setup (ticking the share row or not) → Skip for Now → Home. */
+/** A new user: Onboarding → what you want to do (skipped) → Auto Setup (ticking the share row or not) → Skip for Now → Home. */
 export async function passOnboarding(app: AnalyticsApp, share: boolean): Promise<void> {
   const { view, rtl } = app;
-  rtl.fireEvent.press(await view.findByTestId('onboarding-skip'));
+  rtl.fireEvent.press(await view.findByTestId('onboarding-next'));
+  rtl.fireEvent.press(await view.findByTestId('onboarding-picks-skip'));
   const skip = await view.findByTestId('auto-setup-skip', {}, { timeout: 10_000 });
   const row = view.getByTestId('auto-setup-share-analytics');
   expect(row.props.accessibilityState).toEqual({ checked: false });

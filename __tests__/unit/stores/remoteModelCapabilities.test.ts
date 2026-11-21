@@ -187,6 +187,39 @@ describe('fetchLmStudioModelInfo', () => {
     expect(result.supportsToolCalling).toBe(true);
     expect(result.contextLength).toBe(8192);
   });
+
+  it('a loaded model reports the context it was loaded with, not its maximum', async () => {
+    globalThis.fetch = jest.fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          models: [{
+            key: 'qwen3-8b',
+            max_context_length: 131072,
+            loaded_instances: [{ id: 'qwen3-8b', config: { context_length: 16384 } }],
+            capabilities: {},
+          }],
+        }),
+      } as any)
+      .mockResolvedValueOnce({ ok: false } as any);
+
+    const result = await fetchLmStudioModelInfo('http://localhost:1234', 'qwen3-8b');
+    expect(result.contextLength).toBe(16384);
+  });
+
+  it('a loaded instance without a context length falls back to the maximum', async () => {
+    globalThis.fetch = jest.fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          models: [{ key: 'qwen3-8b', max_context_length: 32768, loaded_instances: [{ id: 'qwen3-8b' }], capabilities: {} }],
+        }),
+      } as any)
+      .mockResolvedValueOnce({ ok: false } as any);
+
+    const result = await fetchLmStudioModelInfo('http://localhost:1234', 'qwen3-8b');
+    expect(result.contextLength).toBe(32768);
+  });
 });
 
 // ---------------------------------------------------------------------------

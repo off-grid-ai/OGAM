@@ -19,6 +19,8 @@ import { SUPPORT_EMAIL } from '../../../src/utils/supportEmail';
 import { SettingsScreen } from '../../../src/screens/SettingsScreen';
 import { useAppStore } from '../../../src/stores/appStore';
 import { withNavigatorRoutes } from '../../harness/realNavigation';
+import { setCatalog } from '@offgrid/i18n';
+import { applyAppLanguage } from '../../../src/i18n/appLanguage';
 
 // The screen runs on a real React Navigation stack (inside a parent stack, as the Settings tab sits
 // inside the app's root stack), on the real app store and the real components. The version on screen
@@ -49,6 +51,19 @@ describe('SettingsScreen', () => {
     app.setHasRegisteredPro(false);
     app.setProBannerDismissed(false);
     app.setOnboardingComplete(true);
+  });
+
+  it('reads in the app language, row descriptions included', () => {
+    // Hand test 2026-11-19: in Spanish the row titles changed and their descriptions stayed English.
+    applyAppLanguage('es');
+    try {
+      const { getByText, queryByText } = renderSettings();
+      expect(getByText('Instrucciones, respuestas y velocidad')).toBeTruthy();
+      expect(getByText('Frase de contraseña y bloqueo de la app')).toBeTruthy();
+      expect(queryByText('Instructions, replies, and speed')).toBeNull();
+    } finally {
+      setCatalog('en', null);
+    }
   });
 
   it('shows the Pro upsell banner when Pro is not active and not dismissed', () => {

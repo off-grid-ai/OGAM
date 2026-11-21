@@ -8,13 +8,15 @@ import {
 import { TouchableOpacity } from '../../components/Touchable';
 import { LoadingDots } from '../../components/LoadingDots';
 import Icon from 'react-native-vector-icons/Feather';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ModelSelectorModal } from '../../components';
 import { HeaderStatusFill } from '../../components/ScreenHeader';
 import { AnimatedEntry } from '../../components/AnimatedEntry';
 import { createStyles } from './styles';
+import { SPACING } from '../../constants';
 import { useTheme } from '../../theme';
 import { getSlot, SLOTS } from '../../bootstrap/slotRegistry';
+import type { ArrivingChatModel } from '../../services/arrivingChatModel';
 import { chatTitle, NEW_CHAT_TITLE } from '../../utils/chatTitle';
 
 type StylesType = ReturnType<typeof createStyles>;
@@ -81,6 +83,28 @@ export const STARTER_PROMPTS = [
   'Explain how compound interest works',
   'Write a short, kind thank-you note',
 ] as const;
+
+/** What an empty chat suggests: questions, pictures (image mode on) or clips (video mode on). */
+export type StarterMode = 'chat' | 'image' | 'video';
+
+export const starterMode = (mode: string): StarterMode =>
+  mode === 'force' ? 'image' : mode === 'video' ? 'video' : 'chat';
+
+const STARTERS: Record<StarterMode, { title: string; hint?: string; icon: string; prompts: readonly string[] }> = {
+  chat: { title: "What's on your mind?", icon: 'message-square', prompts: STARTER_PROMPTS },
+  image: {
+    title: 'What should it draw?',
+    hint: 'Describe a picture, or tap one to try. Pick a style below.',
+    icon: 'image',
+    prompts: ['A lighthouse at dusk, waves below', 'A cozy reading nook on a rainy day', 'A red fox in a snowy forest'],
+  },
+  video: {
+    title: 'What should it film?',
+    hint: 'Describe a scene, or tap one to try. Ask for a film for a longer story.',
+    icon: 'film',
+    prompts: ['A fox walking through fresh snow', 'Rain on a neon street at night', 'Waves on a quiet beach at sunrise'],
+  },
+};
 
 export const ChatHeader: React.FC<{
   styles: StylesType;
@@ -167,6 +191,13 @@ export const ChatHeader: React.FC<{
   </View>
 );
 
+/** What an empty chat says while its first model downloads. */
+function arrivingHint(model: ArrivingChatModel): string {
+  return model.failed
+    ? `${model.name} stopped downloading.`
+    : `${model.name} is downloading: ${Math.round(model.progress * 100)}%. Ask now. It answers when it is ready.`;
+}
+
 export const EmptyChat: React.FC<{
   styles: StylesType;
   colors: ColorsType;
@@ -177,32 +208,53 @@ export const EmptyChat: React.FC<{
   isRemote?: boolean;
   /** Sends a starter prompt through the same path as the composer. */
   onStarter?: (prompt: string) => void;
-}> = ({ styles, colors, activeModel, activeModelName, activeProject, setShowProjectSelector, isRemote, onStarter }) => (
-  <View style={styles.emptyChat}>
+  /** What the composer is making; its starters match. */
+  mode?: StarterMode;
+  /** The first chat model while it downloads: the person can ask now. */
+  arriving?: ArrivingChatModel | null;
+  /** Starts the first chat model's stopped download again. */
+  onRetryArriving?: () => void;
+}> = ({ styles, colors, activeModel, activeModelName, activeProject, setShowProjectSelector, isRemote, onStarter, mode = 'chat', arriving, onRetryArriving }) => {
+  const starters = STARTERS[mode];
+  return (
+  <View style={styles.emptyChat} testID={`empty-chat-${mode}`}>
     <AnimatedEntry index={0} staggerMs={60}>
       <View style={styles.emptyChatIconContainer}>
-        <Icon name="message-square" size={32} color={colors.textMuted} />
+        <Icon name={starters.icon} size={32} color={colors.textMuted} />
       </View>
     </AnimatedEntry>
     <AnimatedEntry index={1} staggerMs={60}>
-      <Text style={styles.emptyChatTitle}>What's on your mind?</Text>
+      <Text style={styles.emptyChatTitle}>{starters.title}</Text>
     </AnimatedEntry>
     <AnimatedEntry index={2} staggerMs={60}>
       <Text style={styles.emptyChatText} testID="empty-chat-hint">
         {/* With no model chosen yet, no name: never "Unknown". */}
-        {activeModelName || activeModel?.name
-          ? `Ask anything. ${activeModelName || activeModel?.name} answers.`
-          : 'Ask anything.'}
+        {starters.hint ?? (arriving && mode === 'chat'
+          ? arrivingHint(arriving)
+          : activeModelName || activeModel?.name
+            ? `Ask anything. ${activeModelName || activeModel?.name} answers.`
+            : 'Ask anything.')}
       </Text>
     </AnimatedEntry>
+    {arriving?.failed && onRetryArriving && (
+      <TouchableOpacity
+        style={[styles.starterChip, styles.starterChipLast]}
+        onPress={onRetryArriving}
+        accessibilityRole="button"
+        accessibilityLabel={`Retry downloading ${arriving.name}`}
+        testID="empty-chat-retry-download"
+      >
+        <Text style={styles.starterText}>Retry download</Text>
+      </TouchableOpacity>
+    )}
     {onStarter && (
       <AnimatedEntry index={3} staggerMs={60}>
         {/* A new person sees what they can ask: one tap sends it. */}
         <View style={styles.starterList} testID="chat-starters">
-          {STARTER_PROMPTS.map((prompt, index) => (
+          {starters.prompts.map((prompt, index) => (
             <TouchableOpacity
               key={prompt}
-              style={[styles.starterChip, index === STARTER_PROMPTS.length - 1 && styles.starterChipLast]}
+              style={[styles.starterChip, index === starters.prompts.length - 1 && styles.starterChipLast]}
               onPress={() => onStarter(prompt)}
               accessibilityRole="button"
               accessibilityLabel={prompt}
@@ -229,7 +281,8 @@ export const EmptyChat: React.FC<{
       </Text>
     </AnimatedEntry>
   </View>
-);
+  );
+};
 
 export const ImageProgressIndicator: React.FC<{
   styles: StylesType;
@@ -300,38 +353,64 @@ export const ImageViewerModal: React.FC<{
   viewerImageUri: string | null;
   onClose: () => void;
   onSave: () => void;
+  /** Shares the picture with the Off Grid AI mark through the system share sheet. */
+  onShare?: () => void;
   /** Video is Pro: "Animate this photo" fills this slot. */
   AnimateAction?: React.ComponentType<any>;
   conversationId?: string | null;
-}> = ({ styles, colors, viewerImageUri, onClose, onSave, AnimateAction, conversationId }) => (
-  <Modal visible={!!viewerImageUri} transparent animationType="fade" onRequestClose={onClose}>
-    <View style={styles.imageViewerContainer}>
-      <TouchableOpacity style={styles.imageViewerBackdrop} activeOpacity={1} onPress={onClose} />
-      {viewerImageUri && (
-        <View style={styles.imageViewerContent}>
-          <Image source={{ uri: viewerImageUri }} style={styles.fullscreenImage} resizeMode="contain" />
-          <View style={styles.imageViewerActions}>
-            {AnimateAction && (
-              <AnimateAction
-                imagePath={viewerImageUri}
-                conversationId={conversationId}
-                onStarted={onClose}
-                buttonStyle={styles.imageViewerButton}
-                textStyle={styles.imageViewerButtonText}
-                iconColor={colors.text}
-              />
-            )}
-            <TouchableOpacity style={styles.imageViewerButton} onPress={onSave}>
-              <Icon name="download" size={24} color={colors.text} />
-              <Text style={styles.imageViewerButtonText}>Save</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.imageViewerButton} onPress={onClose}>
+}> = ({ styles, colors, viewerImageUri, onClose, onSave, onShare, AnimateAction, conversationId }) => {
+  const insets = useSafeAreaInsets();
+  return (
+    <Modal visible={!!viewerImageUri} transparent animationType="fade" onRequestClose={onClose}>
+      <View style={styles.imageViewerContainer}>
+        <TouchableOpacity style={styles.imageViewerBackdrop} activeOpacity={1} onPress={onClose} />
+        {viewerImageUri && (
+          <View style={styles.imageViewerContent}>
+            <Image source={{ uri: viewerImageUri }} style={styles.fullscreenImage} resizeMode="contain" />
+            <TouchableOpacity
+              style={[styles.imageViewerClose, { top: insets.top + SPACING.md }]}
+              onPress={onClose}
+              accessibilityRole="button"
+              accessibilityLabel="Close"
+              testID="image-viewer-close"
+            >
               <Icon name="x" size={24} color={colors.text} />
-              <Text style={styles.imageViewerButtonText}>Close</Text>
             </TouchableOpacity>
+            <View style={[styles.imageViewerActions, { bottom: insets.bottom + SPACING.xl }]}>
+              {AnimateAction && (
+                <AnimateAction
+                  imagePath={viewerImageUri}
+                  conversationId={conversationId}
+                  onStarted={onClose}
+                  buttonStyle={styles.imageViewerButton}
+                  textStyle={styles.imageViewerButtonText}
+                  iconColor={colors.text}
+                />
+              )}
+              {onShare && (
+                <TouchableOpacity
+                  style={styles.imageViewerButton}
+                  onPress={onShare}
+                  accessibilityRole="button"
+                  accessibilityLabel="Share"
+                  testID="image-viewer-share"
+                >
+                  <Icon name="share" size={24} color={colors.text} />
+                </TouchableOpacity>
+              )}
+              <TouchableOpacity
+                style={styles.imageViewerButton}
+                onPress={onSave}
+                accessibilityRole="button"
+                accessibilityLabel="Save"
+                testID="image-viewer-save"
+              >
+                <Icon name="download" size={24} color={colors.text} />
+              </TouchableOpacity>
+            </View>
           </View>
-        </View>
-      )}
-    </View>
-  </Modal>
-);
+        )}
+      </View>
+    </Modal>
+  );
+};

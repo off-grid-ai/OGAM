@@ -26,7 +26,7 @@ describe('ProjectsScreen', () => {
     const app = await mountProjectsApp();
 
     expect(app.view.getByText('Projects')).toBeTruthy();
-    expect(app.view.getByText('Projects group related chats with shared context and instructions.')).toBeTruthy();
+    expect(app.view.queryByText('Projects group related chats with shared context and instructions.')).toBeNull();
     expect(app.view.getByText('New')).toBeTruthy();
   });
 

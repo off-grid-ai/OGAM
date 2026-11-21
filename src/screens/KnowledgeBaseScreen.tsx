@@ -300,7 +300,7 @@ export const KnowledgeBaseScreen: React.FC = () => {
             title="Add a file"
             variant="hero"
             size="small"
-            icon={<Icon name="plus" size={16} color={colors.onHero} />}
+            icon={<Icon name="plus" size={16} color={colors.primary} />}
             onPress={handleAddDocument}
             disabled={isPicking}
             testID="kb-add-first"

@@ -18,6 +18,10 @@ export interface GuideMedia {
 /** Where a topic leads on this phone. Pro ones lead to Get Pro until Pro is active. */
 export type GuideOpen =
   | 'chat'
+  /** A new chat already making pictures. */
+  | 'images'
+  /** A new chat already making clips. */
+  | 'video'
   | 'projects'
   | 'models'
   | 'notes'
@@ -116,11 +120,11 @@ function screen(source: GuideMedia['light'], aspect: number, clip?: number): Gui
 
 const OPEN: Record<string, GuideOpen> = {
   'phone-chat': 'chat',
-  'phone-images': 'chat',
+  'phone-images': 'images',
   'phone-vision': 'chat',
   'phone-speech': 'chat',
   'phone-voice': 'chat',
-  'phone-video': 'chat',
+  'phone-video': 'video',
   'phone-documents': 'projects',
   'phone-models': 'models',
   'phone-notes': 'notes',

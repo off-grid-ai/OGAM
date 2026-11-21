@@ -290,15 +290,6 @@ const createSectionStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     ...TYPOGRAPHY.metaSmall,
     color: colors.textMuted,
   },
-  deleteAction: {
-    backgroundColor: colors.errorBackground,
-    justifyContent: 'center' as const,
-    alignItems: 'center' as const,
-    width: 44,
-    borderRadius: 10,
-    marginBottom: SPACING.sm + SPACING.xs,
-    marginLeft: SPACING.sm,
-  },
   statsRow: {
     flexDirection: 'row' as const,
     backgroundColor: colors.surface,
@@ -323,9 +314,6 @@ const createSectionStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
   statDivider: {
     width: 1,
     backgroundColor: colors.border,
-  },
-  swipeableContainer: {
-    overflow: 'visible' as const,
   },
 });
 const createPickerStyles = (colors: ThemeColors) => ({

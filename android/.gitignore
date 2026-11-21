@@ -1,0 +1,3 @@
+# The bundled model packs fetch their GGUF here at build time (bundled-model.gradle).
+chat_model/src/main/assets/
+chat_mmproj/src/main/assets/

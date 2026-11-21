@@ -54,6 +54,9 @@ esac
 # ── pre-flight ─────────────────────────────────────────────────────
 command -v node   >/dev/null || error "node not installed"
 command -v gh     >/dev/null || error "gh CLI not installed"
+# fastlane needs Ruby 3.2+; a shell without Homebrew's PATH finds macOS's 2.6 first.
+source "$ROOT_DIR/scripts/lib/ruby-path.sh"
+use_modern_ruby || error "No Ruby 3.2+ for fastlane (see above)."
 command -v bundle >/dev/null || error "bundler not installed (bundle install)"
 [ -f fastlane/Fastfile ]     || error "fastlane/Fastfile not found"
 [ -z "$(git status --porcelain)" ] || error "Working tree is dirty. Commit or stash first."

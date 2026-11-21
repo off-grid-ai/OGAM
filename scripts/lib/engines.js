@@ -225,6 +225,23 @@ function summaryMarkdown(results) {
   return lines.join('\n');
 }
 
+/** Builds apart before the summary flags llama.cpp drift between desktop and mobile. */
+const LLAMA_DRIFT_LIMIT = 50;
+
+/**
+ * Desktop's llama.cpp pin ("b12532") beside the @ogai/llama.rn build the app ships
+ * ("0.13.0-b12415"), so the two apps cannot drift apart unnoticed.
+ */
+function llamaDriftLine(desktopRef, llamaRnVersion) {
+  const desktop = Number(/^b(\d+)$/.exec(desktopRef || '')?.[1]);
+  const mobile = Number(/-b(\d+)/.exec(llamaRnVersion || '')?.[1]);
+  const both = `desktop \`${desktopRef || 'unknown'}\`, @ogai/llama.rn \`${llamaRnVersion || 'unknown'}\``;
+  if (!desktop || !mobile) return `llama.cpp: ${both}`;
+  const gap = Math.abs(desktop - mobile);
+  const flag = gap > LLAMA_DRIFT_LIMIT ? ` **Over ${LLAMA_DRIFT_LIMIT} builds apart: update the lagging app.**` : '';
+  return `llama.cpp: ${both} (${gap} builds apart).${flag}`;
+}
+
 /** The branch the daily job pushes its bump to, and the identity its commits carry. */
 const BUMP_BRANCH = 'chore/engine-updates';
 const BOT_EMAIL = '41898282+github-actions[bot]@users.noreply.github.com';
@@ -310,6 +327,7 @@ module.exports = {
   gradlePin,
   setGradlePin,
   summaryMarkdown,
+  llamaDriftLine,
   githubDecision,
   heldSince,
   heldIssue,

@@ -1,0 +1,31 @@
+Use case: ui-mockup.
+Create one final raster screenshot, portrait, exactly 1024 x 1536 pixels. Fill the entire canvas edge to edge with the browser extension side panel. No outer margins, device frame, browser chrome, perspective, watermark or added copy.
+
+REFERENCE ROLES:
+Image 1, refs/extension-panel.jpg: exact source for the compact single-row header arrangement and bottom composer arrangement. Convert its light appearance to the dark style below. Preserve history icon, title, status pill, then cube, pen nib, key, gear and close icons in that order. Preserve the composer at the bottom with its placeholder above the plus and round send controls.
+Image 2, refs/desktop-groups.jpg: exact source for dark styling, Geist sans, Geist Mono, near-black background, faint fine dot lattice, a soft diffuse emerald light near the top, translucent dark glass, thin hairline borders, rounded corners, neutral text hierarchy and restrained emerald accent. Do not copy its onboarding title, cards, footer text or progress controls into this completed first-run panel.
+
+SCREEN:
+The extension side panel immediately after first run. At the top, a compact full-width header with a subtle bottom hairline. One horizontal row, with comfortable spacing and all controls fully visible: a thin history line icon, exact title "Off Grid AI", a quiet small rounded status pill containing a tiny emerald dot and exact text "Connected", then neutral thin line icon buttons: cube, pen nib, key, gear, close. Layout proportions match reference 1; adapt to 1024px width, with no wrapping or clipping. Header title Geist sans regular, about 30px at this output resolution; all icons thin Phosphor style.
+
+Main area: largely open, quiet near-black field with a very faint fine dot lattice and just one diffuse low-intensity emerald glow near the top. No central title, welcome text, illustration, logo, chat bubbles or extra labels.
+
+Near the bottom, directly above the composer, place a small muted uppercase Geist Mono label "YOUR PICKS". Beneath it, one translucent dark-glass list with a neutral thin hairline border and rounded corners, three equal-height rows separated by extremely subtle neutral hairlines. Each row has a small neutral thin line icon at the left, exact text in regular Geist sans, and a small neutral rightward arrow at the far right. Use a document lines icon for the first row, selection cursor icon for the second and pen icon for the third. Text must stay on one line, fully legible:
+"Summarize this page"
+"Explain the part I selected"
+"Fix the text I'm writing"
+Use approximately 30px row text at 1024px width. Place the list at approximately x=28 to x=996 and y=1070 to y=1320; keep a quiet label immediately above it. All three rows share one glass container.
+
+At the bottom, use the composer from reference 1, approximately x=26 to x=998, y=1350 to y=1510. One rounded dark-glass input box, subtle neutral hairline border. Exact placeholder "Ask anything" near its upper left. A quiet thin plus icon button at its lower left. A round send button at its lower right with a thin upward arrow; this is the only filled emerald primary action, #34D399 with dark arrow. All controls inside the composer. Preserve the reference's two-level internal composer layout.
+
+Style: quiet real product screenshot, precise UI edges, Geist sans light-to-regular and Geist Mono only for the small uppercase label. Background near #0A0A0A. Glass surfaces barely lighter than background, translucent, hairline borders, modest rounded corners. All text and icons neutral greys except tiny emerald status dot and the one emerald send action. No colourful badges, emojis, traffic lights, 3D, illustrations or decorative effects. Do not add selected-tile marks, PRO labels, onboarding footer, progress line, Back or Continue controls: this specific screen uses the reference panel composer at the bottom.
+
+TEXT REQUIREMENT: The only visible text must be the following seven exact strings, each appearing once, with exact spelling, capitalization and apostrophe:
+"Off Grid AI"
+"Connected"
+"YOUR PICKS"
+"Summarize this page"
+"Explain the part I selected"
+"Fix the text I'm writing"
+"Ask anything"
+Do not render quotation marks. Check all seven strings carefully. No extra copy.

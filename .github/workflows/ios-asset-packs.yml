@@ -1,0 +1,33 @@
+# The bundled chat model's Apple-hosted asset packs (LFM3-VL-2B): package them and upload them to App
+# Store Connect. Run by hand when the release goes out, before the App Store version is submitted:
+# the version can only use packs App Store Connect has processed. Nothing here runs on a push.
+#
+# Secrets: ASC_API_KEY_P8, ASC_KEY_ID, ASC_ISSUER_ID (already in the repo).
+name: iOS asset packs (bundled model)
+
+on:
+  workflow_dispatch: {}
+
+jobs:
+  upload:
+    runs-on: macos-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - name: Use Xcode 26 (ba-package, altool asset packs)
+        run: sudo xcode-select -s "$(ls -d /Applications/Xcode_26*.app | sort -V | tail -1)"
+      - name: Set up Ruby (fastlane)
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.3'
+          bundler-cache: true
+      - name: Package the asset packs
+        run: bash scripts/build-ios-asset-packs.sh
+      - name: Upload to App Store Connect
+        env:
+          ASC_API_KEY_P8: ${{ secrets.ASC_API_KEY_P8 }}
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+        run: bundle exec fastlane ios upload_asset_packs

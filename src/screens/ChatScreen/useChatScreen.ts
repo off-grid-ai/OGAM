@@ -16,6 +16,8 @@ import {
 import { useSyncIdentityStore } from '../../stores/syncIdentityStore';
 import { useRemoteChatStreamPreviews } from './useRemoteChatStreamPreviews';
 import { useActiveTextModel } from '../../hooks/useActiveTextModel';
+import { useArrivingChatModel, waitingMessagesStep } from '../../services/arrivingChatModel';
+import { generationService } from '../../services/generationService';
 import { hardwareService } from '../../services';
 import { useGeneratingConversationId } from '../../hooks/useGenerationSession';
 import {
@@ -104,6 +106,7 @@ export const useChatScreen = () => {
     (id: string, text: string) => Promise<void>
   >(null);
   const genDepsRef = useRef<GenerationDeps | null>(null);
+  const renderWaitersRef = useRef<Array<() => void>>([]);
   // Set once the chat actions exist below; a "Load Anyway" from the turn path resumes through it.
   const resumePendingRef = useRef<() => void>(() => {});
   useChatAudioLifecycle(navigation);
@@ -190,6 +193,7 @@ export const useChatScreen = () => {
     !!activeImageModelId ||
     !!activeRemoteImageServer;
   const activeModelName = activeModelInfo.modelName;
+  const arrivingTextModel = useArrivingChatModel();
   const availableDownloadedTextModels = useMemo(
     () =>
       downloadedModels.filter(model => !isSuspiciousRecoveredTextModel(model)),
@@ -270,11 +274,34 @@ export const useChatScreen = () => {
     setPendingMessage: (text: string, attachments?: MediaAttachment[]) => {
       pendingMessageRef.current = { text, attachments };
     },
+    arrivingTextModel,
+    nextRender: () => new Promise<GenerationDeps>(resolve => {
+      renderWaitersRef.current.push(() => resolve(genDepsRef.current as GenerationDeps));
+    }),
     updateMessageTurnKind,
     createConversation,
     pendingProjectId,
   };
   genDepsRef.current = genDeps;
+  // A load ends in a state change, so a render follows; its effects hand the new deps to whoever waits.
+  // Unmount hands them the last deps, so a waiting turn never hangs.
+  useEffect(() => { renderWaitersRef.current.splice(0).forEach(resolve => resolve()); });
+  useEffect(() => () => { renderWaitersRef.current.splice(0).forEach(resolve => resolve()); }, []);
+
+  // Messages sent while the first chat model downloaded go once it is chosen. A download that is gone
+  // with no model hands them to the model the person picks next. After render: the turn reads these deps.
+  const waitingForModel = queuedMessages.some(message => message.waitsForModel);
+  const waitingStep = waitingMessagesStep(waitingForModel, activeModelId !== null, arrivingTextModel);
+  useEffect(() => {
+    if (waitingStep === 'send') generationService.drainQueue();
+    if (waitingStep !== 'release') return;
+    const waiting = generationService.getState().queuedMessages.filter(message => message.waitsForModel);
+    waiting.forEach(message => generationService.removeFromQueue(message.id));
+    pendingMessageRef.current = {
+      text: waiting.map(message => message.text).join('\n\n'),
+      attachments: waiting.flatMap(message => message.attachments ?? []),
+    };
+  }, [waitingStep]);
 
   const modelDeps = {
     activeModel,
@@ -388,6 +415,8 @@ export const useChatScreen = () => {
   resumePendingRef.current = chatActions.resumePendingMessage;
 
   return {
+    /** Pictures or clips this chat was opened to make, if any. */
+    startMode: route.params?.mode,
     isModelLoading,
     loadingModel,
     supportsVision,
@@ -408,7 +437,8 @@ export const useChatScreen = () => {
     setShowScrollToBottom,
     isClassifying,
     animateLastN,
-    queue: chatQueueView(queuedMessages, queueHold, activeConversationId),
+    queue: chatQueueView(queuedMessages, queueHold, activeConversationId, arrivingTextModel),
+    arrivingTextModel,
     viewerImageUri,
     setViewerImageUri,
     imageGenState,

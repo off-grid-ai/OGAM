@@ -1,0 +1,76 @@
+// The bundled chat model's Play AI pack (chat_model, chat_mmproj): the one model that ships with the app,
+// so the first chat does not wait for a model chosen and downloaded after install.
+//
+// The GGUF files are too big for git. Before the pack builds, this fetches its one file from the
+// catalog's pinned Hugging Face URL, checks its sha256, keeps it in a cache outside the repo, and copies it
+// into src/main/assets (git-ignored). The catalog row (catalog/models.json) is the one source of the file,
+// its URL and its hash.
+//
+// Each pack module sets ext.bundledModelFile before it applies this file.
+import groovy.json.JsonSlurper
+import java.security.MessageDigest
+
+def catalogFile = file("${rootDir}/../catalog/models.json")
+def fileName = project.ext.bundledModelFile
+def entry = new JsonSlurper().parse(catalogFile).sections.models
+    .collectMany { it.files ?: [] }
+    .find { it.name == fileName }
+if (entry == null) throw new GradleException("bundled model: ${fileName} is not in catalog/models.json")
+
+def cacheDir = new File(System.getProperty("user.home"), ".cache/offgrid-bundled-models")
+def cached = new File(cacheDir, "${entry.sha256}-${fileName}")
+def target = file("src/main/assets/${fileName}")
+// The model's licence travels with the model (LFM Open License v1.0, section 4: a copy with every
+// redistribution).
+def licence = file("${rootDir}/../third_party/LFM-Open-License-v1.0.txt")
+
+def sha256Of = { File f ->
+    def digest = MessageDigest.getInstance("SHA-256")
+    f.withInputStream { input ->
+        byte[] buffer = new byte[1 << 20]
+        int read
+        while ((read = input.read(buffer)) > 0) digest.update(buffer, 0, read)
+    }
+    digest.digest().encodeHex().toString()
+}
+
+def fetchBundledModel = tasks.register("fetchBundledModel") {
+    description = "Fetches ${fileName} into the pack's assets, checked against the catalog's sha256."
+    outputs.file(target)
+    doLast {
+        def licenceTarget = file("src/main/assets/LICENSE-LFM-Open-License-v1.0.txt")
+        licenceTarget.parentFile.mkdirs()
+        licenceTarget.bytes = licence.bytes
+        if (!cached.exists() || cached.length() != (entry.sizeBytes as long)) {
+            cacheDir.mkdirs()
+            def partial = new File(cacheDir, "${cached.name}.part")
+            logger.lifecycle("bundled model: downloading ${fileName} (${entry.sizeBytes} bytes)")
+            new URL(entry.url).openStream().withCloseable { input -> partial.withOutputStream { it << input } }
+            def actual = sha256Of(partial)
+            if (actual != entry.sha256) {
+                partial.delete()
+                throw new GradleException("bundled model: ${fileName} sha256 ${actual} != catalog ${entry.sha256}")
+            }
+            partial.renameTo(cached)
+        }
+        if (!target.exists() || target.length() != cached.length()) {
+            target.parentFile.mkdirs()
+            target.delete()
+            // A hard link, not a copy: the file is 1.1 GB and the cache already holds it.
+            try {
+                java.nio.file.Files.createLink(target.toPath(), cached.toPath())
+            } catch (Exception ignored) {
+                java.nio.file.Files.copy(cached.toPath(), target.toPath())
+            }
+        }
+    }
+}
+
+// Only an app bundle carries the packs (the AAB for Play). A debug APK, a compile or a test run never
+// fetches 1.5 GB: the app then finds no pack and uses the regular download, as a sideloaded build does.
+def buildsBundle = gradle.startParameter.taskNames.any { it.toLowerCase().contains("bundle") }
+if (buildsBundle) {
+    tasks.configureEach { task ->
+        if (task.name != "fetchBundledModel" && !task.name.startsWith("clean")) task.dependsOn(fetchBundledModel)
+    }
+}

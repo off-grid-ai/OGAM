@@ -20,7 +20,7 @@ export const VideoUpsell: React.FC<{ onGetPro: () => void }> = ({ onGetPro }) =>
         Turn a sentence or a photo into a short film. Made on your phone or your computer, never in
         the cloud.
       </Text>
-      <Button title="Get Pro" variant="primary" size="medium" onPress={onGetPro} style={styles.button} />
+      <Button title="Get Pro" variant="hero" size="medium" onPress={onGetPro} style={styles.button} />
     </View>
   );
 };

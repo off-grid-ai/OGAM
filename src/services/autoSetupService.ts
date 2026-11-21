@@ -1,6 +1,8 @@
 import { modelDownloadService } from './modelDownloadService';
 import type { ModelDownload, ModelDownloadStartRequest } from './modelDownloadService/types';
 import { useAppStore } from '../stores';
+import { selectHasProAccess } from '../stores/proAccessSlice';
+import { setupKindsForPicks } from './onboardingPicks';
 import { activeModelService } from './activeModelService';
 import { flowFinished, flowStep } from './analytics/analytics';
 import { uniformDownloadId } from './modelDownloadService/uniformId';
@@ -84,6 +86,9 @@ export interface AutoSetupSession {
   selectTier(tier: AutoSetupTier): void;
   toggleKind(kind: AutoSetupModelKind): void;
   start(): Promise<void>;
+  /** Start a plan's downloads (Quick start unless another is named) and let them finish after the
+   *  screen is gone: what they bring is chosen when it arrives, as Continue would. */
+  startInBackground(tier?: AutoSetupTier): Promise<void>;
   cancel(): Promise<void>;
   complete(): void;
   dispose(): void;
@@ -198,6 +203,12 @@ function reportDownloadPhase(previous: AutoSetupSnapshot['phase'], next: AutoSet
   else if (next.phase === 'failed') flowFinished('onboarding', 'failed', next.error);
 }
 
+/** What onboarding's picks need is checked; with no picks, the chat model alone, as before. */
+function pickedKinds(): AutoSetupModelKind[] {
+  const app = useAppStore.getState();
+  return setupKindsForPicks(app.onboardingPicks, selectHasProAccess(app));
+}
+
 export function createAutoSetupSession(
   boundaries: AutoSetupSessionBoundaries = {},
 ): AutoSetupSession {
@@ -208,13 +219,19 @@ export function createAutoSetupSession(
   let pendingEmbeddingId: string | null = null;
   let embeddingAbort: AbortController | null = null;
   let disposed = false;
+  // Started in the background: leaving the screen keeps watching the downloads until they end.
+  let handedOff = false;
+  let detached = false;
   let operation = 0;
   let refreshInFlight = false;
+  // A change that lands while a read is in flight asks for one more read, so the last change
+  // (a zip finishing its extraction) is never dropped.
+  let refreshAgain = false;
   let state: AutoSetupSnapshot = {
     phase: 'loading_catalog',
     plans: [],
     selectedTier: tierFromPersistedIntent(),
-    selectedKinds: ['text'],
+    selectedKinds: pickedKinds(),
     installedIds: [],
     outcomes: {},
     error: null,
@@ -226,6 +243,7 @@ export function createAutoSetupSession(
     state = { ...state, ...patch };
     reportDownloadPhase(previous, state);
     listeners.forEach(listener => listener());
+    if (detached && (state.phase === 'completed' || state.phase === 'failed')) finishDetached();
   };
 
   const selectedPlan = (): AutoSetupPlan | undefined =>
@@ -256,9 +274,14 @@ export function createAutoSetupSession(
   };
 
   const refreshDownloads = async (): Promise<void> => {
-    if (disposed || refreshInFlight || activeIds.size === 0) return;
+    if (disposed || activeIds.size === 0) return;
+    if (refreshInFlight) {
+      refreshAgain = true;
+      return;
+    }
     const token = operation;
     refreshInFlight = true;
+    refreshAgain = false;
     try {
       const listed = await downloads.list();
       if (disposed || token !== operation) return;
@@ -294,6 +317,7 @@ export function createAutoSetupSession(
     } finally {
       refreshInFlight = false;
     }
+    if (refreshAgain) await refreshDownloads();
   };
 
   const unsubscribeDownloads = downloads.subscribe(() => {
@@ -491,6 +515,39 @@ export function createAutoSetupSession(
     await refreshDownloads();
   };
 
+  const complete = (): void => {
+    const plan = selectedPlan();
+    if (plan && state.phase === 'completed') {
+      const app = useAppStore.getState();
+      if (state.selectedKinds.includes('text') && app.activeModelId === null) {
+        activeModelService.selectTextModel(plan.items[0].id);
+      }
+      if (state.selectedKinds.includes('image') && app.activeImageModelId === null) {
+        app.setActiveImageModelId(plan.items[1].id);
+      }
+      if (state.selectedKinds.includes('video') && app.activeVideoModelId === null && plan.items[3]) {
+        app.setActiveVideoModelId(plan.items[3].id);
+      }
+    }
+  };
+
+  const teardown = (): void => {
+    disposed = true;
+    operation += 1;
+    unsubscribeDownloads();
+    // Leaving Auto Setup must not cancel model downloads. Their lifecycle belongs
+    // to modelDownloadService, so Download Manager can keep showing and controlling
+    // the same work after this screen is gone.
+    activeIds.clear();
+    listeners.clear();
+  };
+
+  /** The handed-off downloads ended after the screen left: choose what arrived, then let go. */
+  function finishDetached(): void {
+    complete();
+    teardown();
+  }
+
   return {
     snapshot: () => state,
     subscribe(listener) {
@@ -521,37 +578,29 @@ export function createAutoSetupSession(
       publish({ selectedKinds, outcomes: {}, error: null, phase: 'ready' });
     },
     start,
+    async startInBackground(tier = 'lean') {
+      if (state.selectedTier !== tier && state.plans.some(plan => plan.tier === tier)) {
+        publish({ selectedTier: tier, outcomes: {}, error: null });
+      }
+      await start();
+      if (state.phase === 'downloading') handedOff = true;
+    },
     async cancel() {
       if (state.phase !== 'downloading') return;
       operation += 1;
       await stopActive(true);
       publish({ phase: 'ready', error: null });
     },
-    complete() {
-      const plan = selectedPlan();
-      if (plan && state.phase === 'completed') {
-        const app = useAppStore.getState();
-        if (state.selectedKinds.includes('text') && app.activeModelId === null) {
-          activeModelService.selectTextModel(plan.items[0].id);
-        }
-        if (state.selectedKinds.includes('image') && app.activeImageModelId === null) {
-          app.setActiveImageModelId(plan.items[1].id);
-        }
-        if (state.selectedKinds.includes('video') && app.activeVideoModelId === null && plan.items[3]) {
-          app.setActiveVideoModelId(plan.items[3].id);
-        }
-      }
-    },
+    complete,
     dispose() {
-      if (disposed) return;
-      disposed = true;
-      operation += 1;
-      unsubscribeDownloads();
-      // Leaving Auto Setup must not cancel model downloads. Their lifecycle belongs
-      // to modelDownloadService, so Download Manager can keep showing and controlling
-      // the same work after this screen is gone.
-      activeIds.clear();
-      listeners.clear();
+      if (disposed || detached) return;
+      // Downloads started in the background keep their session until they end.
+      if (handedOff && state.phase === 'downloading') {
+        detached = true;
+        listeners.clear();
+        return;
+      }
+      teardown();
     },
   };
 }

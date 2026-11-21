@@ -1,0 +1,21 @@
+Use case: ui-mockup.
+Create one final, high-fidelity flat screenshot of the Off Grid AI browser extension welcome page, step 4 of 5. Output a PNG in landscape, exactly 1536 x 1024 pixels. Fill the canvas edge to edge. This is a screen design, with no browser chrome, device frame, perspective, illustration or watermark.
+
+Reference image: /Users/user/wednesday/off-grid-ai/mobile/docs/review/onboarding-concepts/extension/concepts/refs/desktop-details.jpg is the visual design source. Match its actual dark near-black background, fine faint dot lattice, single soft diffuse emerald glow near the top, translucent charcoal glass rows, thin hairline borders, restrained corner radii, thin Phosphor-style line icons, muted neutral text and quiet footer. Use the reference only for visual style and rows; replace its content with the exact screen content below.
+
+Composition: a centered column about 800 pixels wide in the upper-middle of the 1536 x 1024 canvas, with generous clear space. Left-align text within that column. Place the small uppercase mono label above a large light-weight title, then a muted subtitle. Below, a glass list containing exactly two comfortable-height rows, divided by a fine neutral hairline. Each row has a small thin line icon at left, its name and reason aligned in a text column, and its permission control aligned at the right. Leave enough width to render every reason on one line, with clear space before the controls. Under the list place the muted settings sentence. The list should have a light translucent dark fill with background dots subtly showing through, a neutral hairline outer border, and rounded corners.
+
+Typography: Geist sans for title, body, rows and buttons; large light title, regular body. Geist Mono for small uppercase muted label and footer step name. The reference is understated: no bold display type, no oversized heavy cards. Use only neutral greys plus emerald #34D399. Emerald is reserved for the Chat permission check, the active progress segment, and the primary button. No PRO labels are needed on this screen.
+
+Exact visible screen copy, each line rendered once, with punctuation and capitalization exactly as written:
+Label: "OFF GRID AI · IN YOUR BROWSER"
+Title: "Allow what your picks need"
+Muted subtitle: "Your browser asks once. Only for what you picked."
+
+Row 1: a thin neutral text-edit line icon, name "Fix and rewrite", muted reason "Read the text box you type in, on any site", and a small quiet neutral outline button on the right labeled "Allow".
+Row 2: a thin neutral chat-bubble line icon, name "Chat", muted reason "Read the page you ask about, only when you ask", and a small emerald check followed by muted neutral text "Allowed" on the right.
+Muted sentence immediately below list: "Change this any time in Settings."
+
+Footer: a thin full-width near-black bottom bar, with a fine neutral top rule. At its left, a short muted decorative line only, no extra words. At the horizontal center of the whole canvas place a short progress indicator of exactly five separated horizontal segments. Segment four alone is bright emerald; other segments are muted dark neutral. Directly under these segments put the tiny tracked mono step name "ALLOW". At the far right, vertically aligned, place the quiet text button "Back", then the quiet text button "Skip", then the emerald filled primary button "Continue" with dark text. All three buttons remain fully inside the canvas with comfortable margins.
+
+Every quoted string above must be correctly spelled, clearly legible, and unclipped. Do not render quotation marks. Do not add any other copy, extra headings, step numbers, badges, navigation, logos, labels, emojis, traffic lights, color-coded badges, 3D effects or illustrations. Preserve the reference's calm desktop onboarding appearance.

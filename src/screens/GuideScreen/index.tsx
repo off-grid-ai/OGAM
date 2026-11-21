@@ -33,6 +33,7 @@ import {
   type GuideAnswerBlock,
   guideFlowAnswer,
   guideFlowAnswerById,
+  guideLastFlowId,
   guideGrounding,
   guideStarterAnswer,
   guideTurnsToSend,
@@ -94,6 +95,7 @@ export const GuideScreen: React.FC = () => {
         <ScreenHeader
           title="What it does for you"
           onBack={() => navigation.goBack()}
+          barBelow
           right={tab === 'ask' && asked ? (
             <TouchableOpacity
               onPress={() => {
@@ -155,7 +157,7 @@ const AskPane: React.FC<{
     const instant = retry
       ? null
       : flowId
-        ? guideFlowAnswerById('mobile', flowId, topics)
+        ? guideFlowAnswerById('mobile', flowId, topics, PLATFORM)
         : guideStarterAnswer('mobile', text, topics);
     if (instant) {
       setTurns([...history, { role: 'assistant', content: instant }]);
@@ -168,7 +170,9 @@ const AskPane: React.FC<{
     // A "how do I…" answer is the app's own steps, found by what the question means when the
     // built-in search model can say it, else by its words; the model answers what no flow fits.
     const vector = await guideQuestionVector(text);
-    const steps = retry ? null : guideFlowAnswer('mobile', text, topics, { platform: PLATFORM, vector });
+    // A follow-up ("what if we're not on the same Wi-Fi?") is read against the flow just shown.
+    const after = guideLastFlowId(turns.filter(t => t.role === 'assistant').map(t => t.content));
+    const steps = retry ? null : guideFlowAnswer('mobile', text, topics, { platform: PLATFORM, vector, after });
     if (steps) {
       setWaiting(false);
       setTurns([...history, { role: 'assistant', content: steps }]);
@@ -266,6 +270,22 @@ const AskPane: React.FC<{
                         >
                           <Text style={styles.pickText}>{pick.label}</Text>
                           <Icon name="chevron-right" size={16} color={colors.textMuted} />
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  ) : block.kind === 'nexts' ? (
+                    <View key={j} style={styles.nexts} accessibilityLabel="Follow-ups">
+                      {block.nexts.map(next => (
+                        <TouchableOpacity
+                          key={next.id}
+                          style={styles.nextChip}
+                          onPress={() => { ask(next.label, false, next.id).catch(() => undefined); }}
+                          disabled={waiting}
+                          accessibilityRole="button"
+                          accessibilityLabel={next.label}
+                          testID={`guide-next-${next.id}`}
+                        >
+                          <Text style={styles.nextText}>{next.label}</Text>
                         </TouchableOpacity>
                       ))}
                     </View>
@@ -518,6 +538,16 @@ const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
     paddingVertical: SPACING.sm + 2,
   },
   pickText: { ...TYPOGRAPHY.bodySmall, flex: 1, color: colors.text },
+  nexts: { flexDirection: 'row' as const, flexWrap: 'wrap' as const, gap: SPACING.sm },
+  nextChip: {
+    minHeight: 44,
+    justifyContent: 'center' as const,
+    paddingHorizontal: SPACING.md,
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  nextText: { ...TYPOGRAPHY.bodySmall, color: colors.textSecondary },
   tileGrid: { flexDirection: 'row' as const, flexWrap: 'wrap' as const, gap: SPACING.sm },
   tile: { ...cardSurface(colors), width: '48.5%' as const, padding: SPACING.md, gap: SPACING.xs },
   answerCardRow: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: SPACING.sm, paddingHorizontal: SPACING.xs },

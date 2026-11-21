@@ -40,7 +40,7 @@
  * per-load, user-confirmed way to push past whatever budget is in effect.
  */
 import { Platform } from 'react-native';
-import { fitTier, PHONE_FIT_BUDGET, phoneFitBudget, type FitBudget, type FitTier } from '@offgrid/models';
+import { fitTier, PHONE_FIT_BUDGET, phoneFitBudget, phoneLoaderShare, type FitBudget, type FitTier } from '@offgrid/models';
 
 /**
  * How the residency manager handles multiple models:
@@ -107,9 +107,9 @@ export function modelBudgetFraction(
     if (totalRamGB <= 8) return 0.75;
     return platform === 'ios' ? 0.92 : 0.88;
   }
-  if (totalRamGB <= 4) return 0.50; // ~2GB on 4GB — safe; dynamic guard tightens under pressure
-  if (totalRamGB <= 8) return 0.60; // 6-8GB
-  return platform === 'ios' ? 0.78 : 0.70; // 12GB+: iOS holds the increased-memory entitlement
+  // ≤4GB 0.50, 6-8GB 0.60, 12GB+ 0.70 (0.78 iOS, increased-memory entitlement): the shared share,
+  // which the phone fit budget also scales by, so the picks never offer more than the loader gives.
+  return phoneLoaderShare(totalRamGB, platform === 'ios' ? 'ios' : 'android');
 }
 
 /** Fraction at which we WARN (load allowed, perf may suffer). Below the budget. */
@@ -150,9 +150,10 @@ export function fileExceedsBudget(sizeBytes: number, ramGB: number, budget: FitB
 }
 
 /** The fit budget for a GGUF chat model on this phone: an iPhone maps its weights, Android copies
- *  them (shared rule). Other models (image, speech, LiteRT) are not mapped: they keep PHONE_FIT_BUDGET. */
-export function textModelBudget(): FitBudget {
-  return phoneFitBudget(Platform.OS === 'ios' ? 'ios' : 'android');
+ *  them (shared rule). With the phone's RAM, an Android budget shrinks with the loader's share below
+ *  12 GB. Other models (image, speech, LiteRT) are not mapped: they keep PHONE_FIT_BUDGET. */
+export function textModelBudget(ramGB?: number): FitBudget {
+  return phoneFitBudget(Platform.OS === 'ios' ? 'ios' : 'android', ramGB);
 }
 
 /** The one fit verdict (shared with Desktop) for a download of this size on this phone: the

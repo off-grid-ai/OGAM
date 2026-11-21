@@ -6,7 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, CompositeNavigationProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
-import Swipeable from 'react-native-gesture-handler/Swipeable';
+import { SwipeToDelete, type SwipeRowHandle } from '../components/SwipeToDelete';
 import Icon from 'react-native-vector-icons/Feather';
 import { Button } from '../components/Button';
 import { ModelSelectorModal } from '../components';
@@ -166,24 +166,13 @@ export const ChatsListScreen: React.FC = () => {
     ));
   };
 
-  const renderRightActions = (conversation: Conversation) => (
-    <TouchableOpacity
-      style={styles.deleteAction}
-      onPress={() => handleDeleteChat(conversation)}
-      accessibilityRole="button"
-      accessibilityLabel={`Delete ${conversation.title}`}
-    >
-      <Icon name="trash-2" size={16} color={colors.error} />
-    </TouchableOpacity>
-  );
-
   // One line per chat, on the page: its title, its project when it has one, and a quiet icon for an
   // image or video chat. No box, no hairlines, no reply preview and no time: the day heading says
   // when, as in ChatGPT, Claude and Gemini (Mac, 2026-11-07: the card list read like settings).
 
   // One row open at a time, and an open row closes on a tap elsewhere or a scroll.
-  const openRow = useRef<Swipeable | null>(null);
-  const rowRefs = useRef(new Map<string, Swipeable | null>());
+  const openRow = useRef<SwipeRowHandle | null>(null);
+  const rowRefs = useRef(new Map<string, SwipeRowHandle | null>());
   const closeOpenRow = () => {
     openRow.current?.close();
     openRow.current = null;
@@ -197,7 +186,7 @@ export const ChatsListScreen: React.FC = () => {
     const kind = chatKind(item.messages);
 
     return (
-      <Swipeable
+      <SwipeToDelete
         ref={ref => {
           rowRefs.current.set(item.id, ref);
         }}
@@ -207,9 +196,8 @@ export const ChatsListScreen: React.FC = () => {
           openRow.current = row;
         }}
         enabled={!selecting}
-        renderRightActions={selecting ? undefined : () => renderRightActions(item)}
-        overshootRight={false}
-        containerStyle={styles.swipeableContainer}
+        onDelete={() => handleDeleteChat(item)}
+        label={item.title}
       >
         <AnimatedListItem
           index={index}
@@ -252,7 +240,7 @@ export const ChatsListScreen: React.FC = () => {
             <Icon name={kind === 'video' ? 'video' : 'image'} size={14} color={colors.textMuted} />
           ) : null}
         </AnimatedListItem>
-      </Swipeable>
+      </SwipeToDelete>
     );
   };
 
@@ -329,6 +317,7 @@ export const ChatsListScreen: React.FC = () => {
       <ScreenHeader
         title="Chats"
         variant="tab"
+        barBelow={sortedConversations.length > 0 || hasComputer}
         right={
           selecting ? (
             <Button
@@ -364,7 +353,7 @@ export const ChatsListScreen: React.FC = () => {
               ) : null}
               <Button
                 title="New"
-                variant="primary"
+                variant="hero"
                 size="small"
                 onPress={handleNewChat}
                 icon={<Icon name="plus" size={16} color={colors.primary} />}
@@ -518,9 +507,6 @@ const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
     flex: 1,
     backgroundColor: colors.background,
   },
-  swipeableContainer: {
-    overflow: 'visible' as const,
-  },
   // brand Mobile profile: standard screen padding is 24px.
   list: {
     paddingHorizontal: SPACING.lg,
@@ -629,14 +615,5 @@ const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
   emptyButtonText: {
     ...TYPOGRAPHY.body,
     color: colors.primary,
-  },
-  deleteAction: {
-    backgroundColor: colors.errorBackground,
-    justifyContent: 'center' as const,
-    alignItems: 'center' as const,
-    width: 44,
-    borderRadius: 10,
-    marginVertical: SPACING.xs,
-    marginLeft: SPACING.sm,
   },
 });

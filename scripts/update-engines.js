@@ -137,6 +137,18 @@ function applyMaven(engine, to) {
   fs.writeFileSync(file, engines.setGradlePin(fs.readFileSync(file, 'utf8'), engine.group, engine.artifact, to));
 }
 
+/** The summary line comparing desktop's llama.cpp pin with the app's @ogai/llama.rn build. */
+async function llamaDrift(pkg) {
+  const llamaRn = engines.pinnedVersion(pkg.dependencies['llama.rn']);
+  try {
+    const res = await fetch('https://raw.githubusercontent.com/off-grid-ai/OGAD/main/resources/engine-pins.json');
+    if (!res.ok) throw new Error(`desktop pins answered ${res.status}`);
+    return engines.llamaDriftLine((await res.json()).llama?.ref, llamaRn);
+  } catch (error) {
+    return `${engines.llamaDriftLine(null, llamaRn)} (desktop pin unreadable: ${error.message})`;
+  }
+}
+
 async function main() {
   const pkgFile = path.join(ROOT, 'package.json');
   const pkg = JSON.parse(fs.readFileSync(pkgFile, 'utf8'));
@@ -177,7 +189,7 @@ async function main() {
     }
   }
 
-  if (SUMMARY) writeWhole(SUMMARY, engines.summaryMarkdown(results));
+  if (SUMMARY) writeWhole(SUMMARY, `${engines.summaryMarkdown(results)}\n\n${await llamaDrift(pkg)}`);
   const pick = status => results.filter(r => r.status === status);
   const report = JSON.stringify({ changed: pick('bump'), held: pick('held'), current: pick('current').map(r => r.id) });
   if (JSON_OUT) writeWhole(JSON_OUT, `${report}\n`);

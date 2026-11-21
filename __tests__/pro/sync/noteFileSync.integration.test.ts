@@ -167,6 +167,9 @@ function writesTo(fs: FsFake, absolute: string): unknown[][] {
 }
 
 describePro('Notes sync on the phone', () => {
+  // The worker's first boot transforms the app (12 s cold in CI); pay it here, not in a journey.
+  beforeAll(() => require('../../harness/proHarness').bootLicensedAppOnce(), 60_000);
+
   beforeEach(() => {
     const { createLicensedMesh } = require('../../harness/licensedMesh');
     mesh = createLicensedMesh();

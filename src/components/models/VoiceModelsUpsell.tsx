@@ -38,7 +38,7 @@ export const VoiceModelsUpsell: React.FC<VoiceModelsUpsellProps> = ({ onGetPro }
         phone's RAM, so what you hear is generated on the device and never sent
         anywhere. Download a voice and the assistant can speak its replies.
       </Text>
-      <Button title="Get Pro" variant="primary" size="medium" onPress={onGetPro} style={styles.button} />
+      <Button title="Get Pro" variant="hero" size="medium" onPress={onGetPro} style={styles.button} />
       <TouchableOpacity
         style={styles.desktopLink}
         onPress={() => Linking.openURL(withUtm(OFF_GRID_DESKTOP_URL, 'voice-upsell')).catch(() => {})}

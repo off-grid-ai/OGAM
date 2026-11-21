@@ -12,6 +12,7 @@
  */
 import { AlertState, showAlert, hideAlert } from '../utils/alertState';
 import { isOverridableMemoryError } from '../utils/modelLoadErrors';
+import { noteTurnNotGood } from '../utils/sharePrompt';
 
 /** Safe message extraction — a thrown value isn't guaranteed to be an Error, and
  *  `(error as Error).message` renders "undefined" for a string/other throw. */
@@ -25,11 +26,23 @@ const errorMessage = (e: unknown): string => (e instanceof Error ? e.message : S
  */
 export function memoryRefusalAlert(
   detail: string,
-  actions: { onTryAnyway: () => void; onCancel?: () => void; onChooseModel?: () => void },
+  actions: {
+    onTryAnyway: () => void;
+    onCancel?: () => void;
+    onChooseModel?: () => void;
+    /** A smaller model that fits, in one tap: first, as the recommended way forward. */
+    smaller?: { label: string; onPress: () => void };
+  },
 ): AlertState {
+  const { smaller } = actions;
+  // A refused load is a turn that did not work: the rating ask never follows it.
+  noteTurnNotGood();
   // Load Anyway can still run the phone out of memory; the sheet says so in one line.
   return showAlert('Insufficient Memory', `${detail}\n\nLoad Anyway may close the app if memory runs out.`, [
-    ...(actions.onChooseModel ? [{ text: 'Choose another model', style: 'primary' as const, onPress: actions.onChooseModel }] : []),
+    ...(smaller ? [{ text: smaller.label, style: 'primary' as const, onPress: smaller.onPress }] : []),
+    ...(actions.onChooseModel
+      ? [{ text: 'Choose another model', ...(smaller ? {} : { style: 'primary' as const }), onPress: actions.onChooseModel }]
+      : []),
     { text: 'Load Anyway', onPress: actions.onTryAnyway },
     { text: 'Cancel', style: 'cancel' as const, onPress: actions.onCancel },
   ]);
@@ -47,6 +60,8 @@ export interface LoadWithOverrideDeps {
   onAttemptEnd?: () => void;
   /** Opens the screen's model picker; offered as the way forward when memory refuses the load. */
   onChooseModel?: () => void;
+  /** The smaller model to offer when memory refuses the load (read when it refuses). */
+  smaller?: () => { label: string; onPress: () => void } | undefined;
 }
 
 /**
@@ -72,10 +87,12 @@ export async function loadModelWithOverride(
               void attempt(true);
             },
             onChooseModel: deps.onChooseModel,
+            smaller: deps.smaller?.(),
           }),
         );
         return;
       }
+      noteTurnNotGood();
       deps.setAlertState(showAlert('Error', `Failed to load model: ${errorMessage(error)}`));
       deps.onError?.(error instanceof Error ? error : new Error(errorMessage(error)));
     } finally {

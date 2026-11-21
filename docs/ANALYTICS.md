@@ -134,6 +134,7 @@ A video model pack reports downloads once for the whole pack: `model` is its cat
 | `brain_action` | OGAD: `action`: `capture_paused`, `capture_resumed`, `search` (a meaning search on the Search screen, at most once a minute; never the terms), `action_accepted`, `action_dismissed`, `vault_unlocked`, `vault_exported` |
 | `reply_regenerated` | none |
 | `boost_promo_shown`, `boost_promo_clicked`, `boost_promo_dismissed` | the private cloud promo: seen (once per session per surface), its button, or closed. `surface`: `models`, `model_settings`, `onboarding`, `home` (OGAM) |
+| `onboarding_picks` | what the person picked in onboarding, as fixed ids: `groups` and `features` (comma-joined, e.g. `chat,images`). OGAM also `skipped: true` when the picks were skipped. Sent once, with the setup opt-in. Picks changed later in Settings are not sent. |
 | `project_created` | none |
 | `document_added` | `file_type` (an extension the app opens, else `other`; `none` without one), `size_bucket` |
 | `feature_used` | `feature`: `voice_input`, `tts`, `image_generation`, `video_generation`, `vision`, `web_search`, `tools`, `mcp_tool`, `remote_server`, `browser_action`, `clipboard`, `meetings`, `sync`, `capture` (OGAD), `scribe` (a fix, an ignore or a word learned), `improve` (a rewrite made), `notes` (a note saved), `vault` (the vault opened or an item saved). OGAM sends `scribe`, `improve`, `notes` and `vault` at most once per session; OGAD sends each feature at most once in 10 minutes. |
@@ -157,7 +158,7 @@ All multi-step journeys use three events with a `flow` property, so every funnel
 
 | `flow` | Steps |
 |---|---|
-| `onboarding` | `setup_shown`, `download_started`, `download_done`, `model_loaded`, `first_message`. Setup is shown before the person can opt in, so `flow_started` and `setup_shown` are sent when they opt in on that screen. |
+| `onboarding` | OGAM: `groups_shown`, `features_shown`, `guide_shown`, then both: `setup_shown`, `download_started`, `download_done`, `model_loaded`, `first_message`. Setup is shown before the person can opt in, so `flow_started` and the steps so far are sent when they opt in on that screen. |
 | `model_transfer` | `opened`, `device_picked`, `model_picked`, `started` |
 | `sync_pairing` | `opened`, `code_shown`, `code_entered`, `paired` |
 | `remote_server` | `opened`, `address_entered`, `tested`, `connected` |

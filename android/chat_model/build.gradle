@@ -1,0 +1,13 @@
+// The bundled chat model's weights, as a Play AI pack: fast-follow, so Play downloads it right after
+// install, and it does not count toward the size the store page shows. See ../bundled-model.gradle.
+apply plugin: "com.android.ai-pack"
+
+ext.bundledModelFile = "LFM3-VL-2B-Q4_K_M.gguf"
+apply from: "../bundled-model.gradle"
+
+aiPack {
+    packName = "chat_model"
+    dynamicDelivery {
+        deliveryType = "fast-follow"
+    }
+}

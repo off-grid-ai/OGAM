@@ -101,6 +101,8 @@ async function plansSeenOnPhone(totalGB: number, settings: Record<string, unknow
     expect(ui.getByTestId('app-loading')).toBeTruthy();
     expect(ui.queryByTestId('auto-setup-plan-lean')).toBeNull();
 
+    // First launch leads with Start chatting; the plans are behind Choose another.
+    fireEvent.press(await waitFor(() => ui.getByTestId('auto-setup-choose-another'), RENDER_WAIT));
     await waitFor(() => expect(ui.getByTestId('auto-setup-plan-lean')).toBeTruthy(), RENDER_WAIT);
     onOpen?.(ui, within);
     const seen: { tier: string; chatModel: string }[] = [];

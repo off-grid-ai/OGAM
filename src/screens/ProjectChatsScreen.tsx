@@ -12,7 +12,7 @@ import { ListGroupSeparator, listGroupRowEnds } from '../components/ListGroup';
 import { cardSurface } from '../theme/surface';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import Swipeable from 'react-native-gesture-handler/Swipeable';
+import { SwipeToDelete } from '../components/SwipeToDelete';
 import Icon from 'react-native-vector-icons/Feather';
 import { Button } from '../components/Button';
 import { CustomAlert, showAlert, hideAlert, AlertState, initialAlertState } from '../components/CustomAlert';
@@ -37,9 +37,6 @@ const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
   container: {
     flex: 1,
     backgroundColor: colors.background,
-  },
-  swipeableContainer: {
-    overflow: 'visible' as const,
   },
   header: {
     flexDirection: 'row' as const,
@@ -132,15 +129,6 @@ const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
     textAlign: 'center' as const,
     marginBottom: SPACING.lg,
   },
-  deleteAction: {
-    backgroundColor: colors.errorBackground,
-    justifyContent: 'center' as const,
-    alignItems: 'center' as const,
-    width: 50,
-    borderRadius: 8,
-    marginBottom: SPACING.sm,
-    marginLeft: 10,
-  },
 });
 
 export const ProjectChatsScreen: React.FC = () => {
@@ -212,26 +200,11 @@ export const ProjectChatsScreen: React.FC = () => {
     ));
   };
 
-  const renderChatRightActions = (conversation: Conversation) => (
-    <TouchableOpacity
-      style={styles.deleteAction}
-      accessibilityRole="button"
-      accessibilityLabel={`Delete ${conversation.title}`}
-      onPress={() => handleDeleteChat(conversation)}
-    >
-      <Icon name="trash-2" size={16} color={colors.error} />
-    </TouchableOpacity>
-  );
-
   const renderChat = ({ item, index }: { item: Conversation; index: number }) => {
     const preview = previewLine(item.messages);
 
     return (
-      <Swipeable
-        renderRightActions={() => renderChatRightActions(item)}
-        overshootRight={false}
-        containerStyle={styles.swipeableContainer}
-      >
+      <SwipeToDelete onDelete={() => handleDeleteChat(item)} label={item.title}>
         <TouchableOpacity
           style={[styles.chatItem, listGroupRowEnds(index, projectChats.length)]}
           onPress={() => handleChatPress(item)}
@@ -252,7 +225,7 @@ export const ProjectChatsScreen: React.FC = () => {
           </View>
           <Icon name="chevron-right" size={16} color={colors.textMuted} />
         </TouchableOpacity>
-      </Swipeable>
+      </SwipeToDelete>
     );
   };
 
@@ -288,7 +261,7 @@ export const ProjectChatsScreen: React.FC = () => {
           {hasModels && (
             <Button
               title="New chat"
-              variant="primary"
+              variant="hero"
               size="medium"
               onPress={handleNewChat}
             />

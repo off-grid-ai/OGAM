@@ -30,6 +30,7 @@ import logger from '../../../utils/logger';
 import { mostRecentConversations } from '../../../utils/conversationOrdering';
 import { remoteServerModelOptions } from '../../../services/remoteModelSelection';
 import { ejectAllModelsForUser } from '../../../services/userModelEjection';
+import { useArrivingChatModel } from '../../../services/arrivingChatModel';
 // Shared hook types live in ./types so the sub-hooks can import them without importing this file
 // (which imports them back — a cycle). Re-exported here for existing external importers.
 import type {
@@ -313,11 +314,14 @@ export const useHomeScreen = (navigation: HomeScreenNavigationProp) => {
     );
   };
 
+  // One rule for New chat, for the button and its tap: a chosen model, or the first chat model on its
+  // way (its chat opens now and answers when it arrives). Media-only chats are created when their
+  // first generation starts.
+  const arrivingChat = useArrivingChatModel();
+  const canStartChat = Boolean(activeTextModelId || arrivingChat || activeImageModelId || activeVideoModelId
+    || activeRemoteMediaServerIds.video);
   const startNewChat = () => {
-    // Media-only chats are created when their first generation starts.
-    if (!activeTextModelId && !activeImageModelId && !activeVideoModelId && !activeRemoteMediaServerIds.video) {
-      return;
-    }
+    if (!canStartChat) return;
     navigation.navigate('Chat', {});
   };
 
@@ -402,6 +406,7 @@ export const useHomeScreen = (navigation: HomeScreenNavigationProp) => {
     handleSelectRemoteImageModel,
     handleUnloadRemoteImageModel,
     handleEjectAll,
+    canStartChat,
     startNewChat,
     continueChat,
     handleDeleteConversation,

@@ -125,7 +125,10 @@ export const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
     padding: SPACING.sm,
     marginLeft: SPACING.sm,
   },
+  // On the file name's line, not centred on a status that wraps (design doc principle 6).
   transferIcon: {
+    alignSelf: 'flex-start' as const,
+    marginTop: 2,
     marginRight: SPACING.sm,
   },
 });

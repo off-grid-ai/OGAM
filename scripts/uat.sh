@@ -86,6 +86,9 @@ sed_in_place() { if sed --version >/dev/null 2>&1; then sed -i "$@"; else sed -i
 # ── pre-flight ─────────────────────────────────────────────────────
 command -v node   >/dev/null || error "node not installed"
 ! stage all finalize || command -v gh >/dev/null || error "gh CLI not installed"
+# fastlane needs Ruby 3.2+; a shell without Homebrew's PATH finds macOS's 2.6 first.
+source "$ROOT_DIR/scripts/lib/ruby-path.sh"
+! stage all build upload || use_modern_ruby || error "No Ruby 3.2+ for fastlane (see above)."
 ! stage all build upload || command -v bundle >/dev/null || error "bundler not installed (bundle install)"
 ! stage all build upload || [ -f fastlane/Fastfile ] || error "fastlane/Fastfile not found"
 # iOS betas go to the TestFlight external groups this names. Check it now: a missing value found at

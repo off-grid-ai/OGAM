@@ -252,7 +252,7 @@ const ToolResultBubbleInner: React.FC<ToolResultBubbleProps> = ({
         disabled={!hasDetails}
         testID={`tool-result-accordion-${toolName || 'unknown'}`}
       >
-        <Icon name={toolIcon} size={13} color={tone} />
+        <Icon name={toolIcon} size={13} color={tone} style={styles.toolStatusIcon} />
         <Text
           style={[styles.toolStatusText, styles.toolStatusTextCompact, { color: tone }]}
           numberOfLines={expanded ? undefined : 2}

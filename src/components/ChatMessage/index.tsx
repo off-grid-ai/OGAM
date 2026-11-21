@@ -1,4 +1,5 @@
 import { useAppStore } from '../../stores';
+import { shareReplyCard } from '../../services/shareCard';
 import { videoGenerationMeta } from '../../utils/modelHelpers';
 import React, { useEffect, useState } from 'react';
 import { View, Text, Clipboard, Keyboard } from 'react-native';
@@ -542,6 +543,16 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
     setAlertState(showAlert('Copied', 'Message copied to clipboard'));
   };
 
+  // The sheet closes first, then the card is drawn and the share sheet opens over the chat.
+  const handleShareCard = () => {
+    setShowActionMenu(false);
+    setTimeout(() => {
+      shareReplyCard(displayContent).catch(() => {
+        setAlertState(showAlert('Could not share', 'The card could not be made. Copy still works.'));
+      });
+    }, 350);
+  };
+
   const handleRetry = () => {
     onRetry?.(message);
     setShowActionMenu(false);
@@ -705,6 +716,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
         alertState={alertState}
         onCloseActionMenu={() => setShowActionMenu(false)}
         onCopy={handleCopy}
+        onShareCard={displayContent.trim() ? handleShareCard : undefined}
         onEdit={handleEdit}
         onRetry={handleRetry}
         onGenerateImage={handleGenerateImage}

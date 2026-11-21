@@ -202,10 +202,17 @@ export async function fetchLmStudioModelInfo(
       ? model.capabilities as Record<string, unknown>
       : {};
 
+    // A loaded model answers with the context it was loaded with, which can be below the model's
+    // maximum; budgeting past it would overflow on the server.
+    const loaded = Array.isArray(model.loaded_instances) ? model.loaded_instances : [];
+    const loadedContext = loaded
+      .map(i => (i as { config?: { context_length?: unknown } })?.config?.context_length)
+      .find((n): n is number => typeof n === 'number' && n > 0);
     const contextLength =
-      typeof model.max_context_length === 'number' && model.max_context_length > 0
+      loadedContext ??
+      (typeof model.max_context_length === 'number' && model.max_context_length > 0
         ? model.max_context_length
-        : 4096;
+        : 4096);
 
     // LM Studio doesn't expose thinking capability in /api/v1/models.
     // Probe via a 1-token streaming request to learn whether THIS model thinks.

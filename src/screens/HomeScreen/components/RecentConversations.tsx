@@ -1,11 +1,10 @@
 import React from 'react';
 import { View, Text } from 'react-native';
 import { TouchableOpacity } from '../../../components/Touchable';
-import Swipeable from 'react-native-gesture-handler/Swipeable';
-import Icon from 'react-native-vector-icons/Feather';
+import { SwipeToDelete } from '../../../components/SwipeToDelete';
 import { AnimatedListItem } from '../../../components/AnimatedListItem';
 import { ListGroup } from '../../../components/ListGroup';
-import { useTheme, useThemedStyles } from '../../../theme';
+import { useThemedStyles } from '../../../theme';
 import { createStyles } from '../styles';
 import { Conversation } from '../../../types';
 import { formatWhen } from '../../../utils/localTime';
@@ -31,20 +30,7 @@ export const RecentConversations: React.FC<Props> = ({
   onDeleteConversation,
   onSeeAll,
 }) => {
-  const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
-
-  const renderRightActions = (conversation: Conversation) => (
-    <TouchableOpacity
-      style={styles.deleteAction}
-      onPress={() => onDeleteConversation(conversation)}
-      testID="delete-conversation-button"
-      accessibilityRole="button"
-      accessibilityLabel={`Delete ${conversation.title}`}
-    >
-      <Icon name="trash-2" size={16} color={colors.error} />
-    </TouchableOpacity>
-  );
 
   return (
     <View style={styles.section}>
@@ -58,11 +44,11 @@ export const RecentConversations: React.FC<Props> = ({
       </View>
       <ListGroup testID="recent-conversations">
       {conversations.map((conv, index) => (
-        <Swipeable
+        <SwipeToDelete
           key={conv.id}
-          renderRightActions={() => renderRightActions(conv)}
-          overshootRight={false}
-          containerStyle={styles.swipeableContainer}
+          onDelete={() => onDeleteConversation(conv)}
+          label={conv.title}
+          testID="delete-conversation-button"
         >
           <AnimatedListItem
             index={index}
@@ -82,7 +68,7 @@ export const RecentConversations: React.FC<Props> = ({
             </Text>
             <Text style={styles.conversationMeta}>{formatDate(conv.updatedAt)}</Text>
           </AnimatedListItem>
-        </Swipeable>
+        </SwipeToDelete>
       ))}
       </ListGroup>
     </View>

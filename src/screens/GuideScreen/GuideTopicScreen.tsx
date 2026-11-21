@@ -71,7 +71,7 @@ export const GuideTopicScreen: React.FC = () => {
             {action ? (
               <Button
                 title={action.label}
-                variant="primary"
+                variant="hero"
                 onPress={action.onPress}
                 icon={<Icon name={action.icon} size={16} color={colors.onPrimary} />}
                 style={styles.footerButton}

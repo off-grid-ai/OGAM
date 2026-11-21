@@ -1,15 +1,8 @@
-import React, { useState, useRef, useEffect } from 'react';
-import {
-  View,
-  Text,
-  Image,
-  FlatList,
-  Dimensions,
-  Animated,
-  Linking,
-} from 'react-native';
+import React, { useEffect } from 'react';
+import { View, Text, Image, Linking } from 'react-native';
 import { TouchableOpacity } from '../components/Touchable';
-import { LIST_CLIPPING_PROPS } from '../constants/listClipping';
+import Icon from 'react-native-vector-icons/Feather';
+import { activeLocale, t } from '@offgrid/i18n';
 import ReanimatedAnimated, {
   useSharedValue,
   useAnimatedStyle,
@@ -23,30 +16,25 @@ import { Button } from '../components';
 import { useTheme, useThemedStyles } from '../theme';
 import type { ThemeColors, ThemeShadows } from '../theme';
 import {
-  ONBOARDING_SLIDES,
-  type OnboardingSlide,
+  onboardingIntro,
+  type OnboardingIntro,
   SPACING,
   TYPOGRAPHY,
   FONTS,
   WEDNESDAY_URL,
 } from '../constants';
-import { callHook, HOOKS } from '../bootstrap/hookRegistry';
-import { useAppStore } from '../stores';
 import { RootStackParamList } from '../navigation/types';
 
 type OnboardingScreenProps = {
   navigation: NativeStackNavigationProp<RootStackParamList, 'Onboarding'>;
 };
 
-const { width } = Dimensions.get('window');
-
-/** Animated slide with staggered entrance: keyword → title → description */
-const SlideContent: React.FC<{
-  item: OnboardingSlide;
-  isActive: boolean;
+/** The intro, with a staggered entrance: keyword → line → title → description. */
+const IntroContent: React.FC<{
+  item: OnboardingIntro;
   styles: ReturnType<typeof createStyles>;
   accentColor: string;
-}> = ({ item, isActive, styles, accentColor }) => {
+}> = ({ item, styles, accentColor }) => {
   const keywordOpacity = useSharedValue(0);
   const keywordTranslateY = useSharedValue(24);
   const titleOpacity = useSharedValue(0);
@@ -56,46 +44,34 @@ const SlideContent: React.FC<{
   const lineWidth = useSharedValue(0);
 
   useEffect(() => {
-    if (isActive) {
-      // Reset
-      keywordOpacity.value = 0;
-      keywordTranslateY.value = 24;
-      titleOpacity.value = 0;
-      titleTranslateY.value = 16;
-      descOpacity.value = 0;
-      descTranslateY.value = 12;
-      lineWidth.value = 0;
+    const ease = Easing.out(Easing.cubic);
 
-      const ease = Easing.out(Easing.cubic);
-
-      // Stagger: keyword → line → title → description
-      keywordOpacity.value = withTiming(1, { duration: 500, easing: ease });
-      keywordTranslateY.value = withTiming(0, { duration: 500, easing: ease });
-      lineWidth.value = withDelay(
-        250,
-        withTiming(1, { duration: 400, easing: ease }),
-      );
-      titleOpacity.value = withDelay(
-        350,
-        withTiming(1, { duration: 400, easing: ease }),
-      );
-      titleTranslateY.value = withDelay(
-        350,
-        withTiming(0, { duration: 400, easing: ease }),
-      );
-      descOpacity.value = withDelay(
-        550,
-        withTiming(1, { duration: 400, easing: ease }),
-      );
-      descTranslateY.value = withDelay(
-        550,
-        withTiming(0, { duration: 400, easing: ease }),
-      );
-    }
+    // Stagger: keyword → line → title → description
+    keywordOpacity.value = withTiming(1, { duration: 500, easing: ease });
+    keywordTranslateY.value = withTiming(0, { duration: 500, easing: ease });
+    lineWidth.value = withDelay(
+      250,
+      withTiming(1, { duration: 400, easing: ease }),
+    );
+    titleOpacity.value = withDelay(
+      350,
+      withTiming(1, { duration: 400, easing: ease }),
+    );
+    titleTranslateY.value = withDelay(
+      350,
+      withTiming(0, { duration: 400, easing: ease }),
+    );
+    descOpacity.value = withDelay(
+      550,
+      withTiming(1, { duration: 400, easing: ease }),
+    );
+    descTranslateY.value = withDelay(
+      550,
+      withTiming(0, { duration: 400, easing: ease }),
+    );
   }, [
     descOpacity,
     descTranslateY,
-    isActive,
     keywordOpacity,
     keywordTranslateY,
     lineWidth,
@@ -124,12 +100,12 @@ const SlideContent: React.FC<{
   }));
 
   return (
-    <View testID={`onboarding-slide-${item.id}`} style={styles.slide}>
+    <View testID="onboarding-intro" style={styles.slide}>
       <View style={styles.slideInner}>
         {/* Hero keyword */}
         <ReanimatedAnimated.View style={keywordStyle}>
           <Text
-            testID={`onboarding-keyword-${item.id}`}
+            testID="onboarding-keyword"
             style={[styles.keyword, { color: accentColor }]}
           >
             {item.keyword}
@@ -162,130 +138,43 @@ const SlideContent: React.FC<{
 export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({
   navigation,
 }) => {
-  const additionalSlides =
-    callHook<readonly OnboardingSlide[]>(HOOKS.onboardingAdditionalSlides) ??
-    [];
-  const slides = [
-    ...ONBOARDING_SLIDES.slice(0, -1),
-    ...additionalSlides,
-    ONBOARDING_SLIDES[ONBOARDING_SLIDES.length - 1],
-  ];
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const flatListRef = useRef<FlatList>(null);
-  const scrollX = useRef(new Animated.Value(0)).current;
-  const setOnboardingComplete = useAppStore(s => s.setOnboardingComplete);
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
 
-  const handleNext = () => {
-    if (currentIndex < slides.length - 1) {
-      flatListRef.current?.scrollToIndex({
-        index: currentIndex + 1,
-        animated: true,
-      });
-    } else {
-      completeOnboarding();
-    }
+  // One page about Off Grid AI, then the picks: what you want to do, which ones, how it works, then
+  // setup. Onboarding counts as done once the picks are finished or skipped there.
+  const getStarted = () => {
+    navigation.replace('OnboardingGroups');
   };
-
-  const handleSkip = () => {
-    completeOnboarding();
-  };
-
-  const completeOnboarding = () => {
-    setOnboardingComplete(true);
-    navigation.replace('AutoSetup');
-  };
-
-  const renderSlide = ({
-    item,
-    index,
-  }: {
-    item: OnboardingSlide;
-    index: number;
-  }) => (
-    <SlideContent
-      item={item}
-      isActive={currentIndex === index}
-      styles={styles}
-      accentColor={colors.primary}
-    />
-  );
-
-  const renderDots = () => (
-    <View testID="onboarding-dots" style={styles.dotsContainer}>
-      {slides.map((_, index) => {
-        const inputRange = [
-          (index - 1) * width,
-          index * width,
-          (index + 1) * width,
-        ];
-
-        const dotWidth = scrollX.interpolate({
-          inputRange,
-          outputRange: [8, 24, 8],
-          extrapolate: 'clamp',
-        });
-
-        const opacity = scrollX.interpolate({
-          inputRange,
-          outputRange: [0.3, 1, 0.3],
-          extrapolate: 'clamp',
-        });
-
-        return (
-          <Animated.View
-            key={index}
-            style={[styles.dot, { width: dotWidth, opacity }]}
-          />
-        );
-      })}
-    </View>
-  );
-
-  const isLastSlide = currentIndex === slides.length - 1;
 
   return (
     <AliveScreen style={styles.container} edges={['top', 'bottom']}>
       <View testID="onboarding-screen" style={styles.container}>
-        <View style={styles.header}>
-          {!isLastSlide && (
-            <Button
-              title="Skip"
-              variant="ghost"
-              onPress={handleSkip}
-              testID="onboarding-skip"
-            />
-          )}
+        {/* The language, set to the phone's; one tap opens the same list as Settings → Language. */}
+        <View style={styles.languageBar}>
+          <TouchableOpacity
+            onPress={() => navigation.navigate('Language')}
+            style={styles.languageChip}
+            testID="onboarding-language"
+            accessibilityRole="button"
+            accessibilityLabel={t('Language: {0}', activeLocale().name)}
+          >
+            <Icon name="globe" size={14} color={colors.textSecondary} />
+            <Text style={styles.languageText} translate="no">{activeLocale().name}</Text>
+            <Icon name="chevron-down" size={14} color={colors.textSecondary} />
+          </TouchableOpacity>
         </View>
-
-        <FlatList
-          {...LIST_CLIPPING_PROPS}
-          // Transformed list (inverted / animated pager): keep the iOS default, no clipping.
-          removeClippedSubviews={false}
-          ref={flatListRef}
-          data={slides}
-          renderItem={renderSlide}
-          horizontal
-          pagingEnabled
-          showsHorizontalScrollIndicator={false}
-          keyExtractor={item => item.id}
-          onScroll={Animated.event(
-            [{ nativeEvent: { contentOffset: { x: scrollX } } }],
-            { useNativeDriver: false },
-          )}
-          onMomentumScrollEnd={e => {
-            const index = Math.round(e.nativeEvent.contentOffset.x / width);
-            setCurrentIndex(index);
-          }}
+        <IntroContent
+          item={onboardingIntro()}
+          styles={styles}
+          accentColor={colors.primary}
         />
-
-        {renderDots()}
 
         <View style={styles.footer}>
           <Button
-            title={isLastSlide ? 'Get Started' : 'Next'}
-            onPress={handleNext}
+            title="Get Started"
+            variant="hero"
+            onPress={getStarted}
             size="large"
             style={styles.nextButton}
             testID="onboarding-next"
@@ -315,15 +204,8 @@ export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({
 
 const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
   container: { flex: 1, backgroundColor: colors.background },
-  header: {
-    flexDirection: 'row' as const,
-    justifyContent: 'flex-end' as const,
-    paddingHorizontal: SPACING.lg,
-    paddingVertical: SPACING.sm,
-    minHeight: 48,
-  },
   slide: {
-    width,
+    flex: 1,
     justifyContent: 'center' as const,
     alignItems: 'center' as const,
   },
@@ -356,19 +238,23 @@ const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
     textAlign: 'left' as const,
     lineHeight: 22,
   },
-  dotsContainer: {
+  languageBar: {
     flexDirection: 'row' as const,
-    justifyContent: 'flex-start' as const,
+    justifyContent: 'flex-end' as const,
+    paddingHorizontal: SPACING.xl,
+    paddingTop: SPACING.md,
+  },
+  languageChip: {
+    flexDirection: 'row' as const,
     alignItems: 'center' as const,
-    marginVertical: SPACING.xl,
-    paddingHorizontal: SPACING.xxl + 8,
+    gap: SPACING.xs,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
-  dot: {
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: colors.primary,
-    marginRight: SPACING.xs,
-  },
+  languageText: { ...TYPOGRAPHY.bodySmall, color: colors.textSecondary },
   footer: {
     paddingHorizontal: SPACING.xl,
     paddingBottom: SPACING.xl,

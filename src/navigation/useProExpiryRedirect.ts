@@ -10,7 +10,14 @@ import type { RootStackParamList } from './types';
 export const appNavigationRef =
   createNavigationContainerRef<RootStackParamList>();
 
-const SETUP_ROUTES = new Set<string>(['Onboarding', 'AutoSetup', 'AdvancedSetup']);
+const SETUP_ROUTES = new Set<string>([
+  'Onboarding',
+  'OnboardingGroups',
+  'OnboardingFeatures',
+  'OnboardingGuide',
+  'AutoSetup',
+  'AdvancedSetup',
+]);
 
 /**
  * Show an expired installation the purchase route, with the app's home under it so Back leaves.
