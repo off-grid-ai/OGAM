@@ -191,10 +191,10 @@ describe('SettingsScreen', () => {
     openURL.mockRestore();
   });
 
-  it('no longer renders the removed Pro Tools row', () => {
+  it('no longer renders the removed Connectors row', () => {
     const { queryByText } = renderSettings();
     // Pro Tools was removed from Settings — it must not surface (mirrors the Voice/TTS removal guard).
-    expect(queryByText('Pro tools')).toBeNull();
+    expect(queryByText('Connectors')).toBeNull();
   });
 
   it('keeps Reset Onboarding in development mode without the removed checklist reset', () => {

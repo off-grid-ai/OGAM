@@ -88,7 +88,7 @@ describe('ToolsScreen', () => {
   it('shows the Pro Tools row to everyone (even free users)', () => {
     const { getByTestId, getByText } = renderTools();
     expect(getByTestId('tools-pro-tools')).toBeTruthy();
-    expect(getByText('Pro tools')).toBeTruthy();
+    expect(getByText('Connectors')).toBeTruthy();
   });
 
   it('opens the Get Pro sheet for a free user when Pro Tools is pressed', async () => {
@@ -125,6 +125,6 @@ describe('ToolsScreen', () => {
     const { getByText, queryByText } = renderTools();
     fireEvent.press(getByText('arrow-left'));
     // The Tools page left the stack; the screen it was opened from is all that remains.
-    await waitFor(() => expect(queryByText('Pro tools')).toBeNull());
+    await waitFor(() => expect(queryByText('Connectors')).toBeNull());
   });
 });
