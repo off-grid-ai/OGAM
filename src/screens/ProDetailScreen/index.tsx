@@ -28,6 +28,7 @@ import { ProManageSection } from './ProManageSection';
 import { ProIncludedSection } from './ProIncludedSection';
 import { ProUnlockModal } from './ProUnlockModal';
 import { LicenceNotice } from '../../components/LicenceNotice';
+import { useHasRegisteredScreen } from '../../navigation/screenRegistry';
 import type { RootStackParamList } from '../../navigation/types';
 import { proPaywallViewed, proPurchased } from '../../services/analytics/analytics';
 import { AliveScreen } from '../../components/AliveScreen';
@@ -100,6 +101,9 @@ export const ProDetailScreen: React.FC = () => {
   // Get the desktop app, or Open it when one is already paired (the shared rule).
   const desktop = useOtherProduct('pro-detail')('desktop');
   const openVerifyModal = () => setVerifyModalVisible(true);
+  // Sync stays open without Pro so a device that has Pro can hand it to this phone.
+  const canPair = useHasRegisteredScreen('Sync');
+  const openPairing = () => navigation.navigate('Sync' as never);
   // Back from the checkout sheet after paying: the key field opens, ready to paste.
   const unlockOnArrival = route.params?.unlock === true;
   useEffect(() => {
@@ -194,13 +198,12 @@ export const ProDetailScreen: React.FC = () => {
           </>
         ) : (
           <>
-            {/* Had Pro and lost it: the reason and the way back come before the pitch. Pair again
-                opens Sync, which stays open without Pro so a licensed device can hand Pro back. */}
+            {/* Had Pro and lost it: the reason and the way back come before the pitch. */}
             <LicenceNotice
               onAction={{
                 renew: openPayPage,
                 'enter-key': openVerifyModal,
-                'pair-again': () => navigation.navigate('Sync' as never),
+                ...(canPair ? { 'pair-again': openPairing } : {}),
               }}
             />
             {/* Hero */}
@@ -261,6 +264,15 @@ export const ProDetailScreen: React.FC = () => {
               onPress={openVerifyModal}
               style={styles.verifyButton}
             />
+            {canPair ? (
+              <Button
+                title="Pair with a device that has Pro"
+                variant="ghost"
+                onPress={openPairing}
+                style={styles.verifyButton}
+                testID="pro-pair-for-pro"
+              />
+            ) : null}
           </>
         )}
 
