@@ -3,10 +3,8 @@
  * lives (the desktop app, the browser extension). A topic with nowhere to go has no button.
  */
 import { useOpenScribe } from '../../hooks/useOpenScribe';
-import { Linking } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { GUIDE_LINKS } from '@offgrid/models';
 import type { RootStackParamList } from '../../navigation/types';
 import { useAppStore, useRemoteServerStore } from '../../stores';
 import { selectHasProAccess } from '../../stores/proAccessSlice';
@@ -14,7 +12,7 @@ import { useHasRegisteredScreen } from '../../navigation/screenRegistry';
 import { useGetPro } from '../../hooks/useGetPro';
 import { useOpenSync } from '../../hooks/useOpenSync';
 import { useOpenProTools } from '../../hooks/useOpenProTools';
-import { withUtm } from '../../utils/utm';
+import { useOtherProduct } from '../../hooks/useOtherProduct';
 import type { GuideOpen, MobileGuideTopic } from './guideTopics';
 
 export interface GuideAction {
@@ -58,6 +56,7 @@ export function useGuideAction(): (topic: MobileGuideTopic) => GuideAction | nul
   const { openSync } = useOpenSync();
   const openTools = useOpenProTools();
   const openScribe = useOpenScribe();
+  const otherProduct = useOtherProduct('guide');
   const registered: Record<string, boolean> = {
     Notes: useHasRegisteredScreen('Notes'),
     Vault: useHasRegisteredScreen('Vault'),
@@ -117,16 +116,8 @@ export function useGuideAction(): (topic: MobileGuideTopic) => GuideAction | nul
         onPress: () => (locked ? getPro('guide') : go(open)),
       };
     }
-    if (topic.get && topic.get !== 'mobile') {
-      const url = withUtm(GUIDE_LINKS[topic.get], 'guide');
-      return {
-        label: 'Get it',
-        icon: 'external-link',
-        locked: false,
-        external: true,
-        onPress: () => { Linking.openURL(url).catch(() => undefined); },
-      };
-    }
+    // It lives in another app: Get it, or Open when that app is already paired (the shared rule).
+    if (topic.get && topic.get !== 'mobile') return { ...otherProduct(topic.get), locked: false };
     return null;
   };
 }

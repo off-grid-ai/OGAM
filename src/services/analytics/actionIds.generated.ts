@@ -855,6 +855,7 @@ export const TEMPLATE_ACTION_IDS: ReadonlyArray<readonly [string, string]> = [
   ["^clipboard-copy-.+$", "clipboard-copy"],
   ["^clipboard-item-.+$", "clipboard-item"],
   ["^document-badge-.+$", "document-badge"],
+  ["^licence-notice-.+$", "licence-notice"],
   ["^mcp-preset-add-.+$", "mcp-preset-add"],
   ["^models-row-.+-ram$", "models-row-ram"],
   ["^queued-message-.+$", "queued-message"],

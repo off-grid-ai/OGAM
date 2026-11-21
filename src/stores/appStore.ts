@@ -666,6 +666,7 @@ function persistedAppState(state: AppState) {
     hasRegisteredPro: state.hasRegisteredPro,
     // Persist eviction so a relaunch cannot grant Pro while the roster is offline.
     proDeviceAdmission: state.proDeviceAdmission,
+    licenceRemovedBy: state.licenceRemovedBy,
     devProDisabled: state.devProDisabled,
     proBannerDismissed: state.proBannerDismissed,
     desktopPromoDismissed: state.desktopPromoDismissed,
