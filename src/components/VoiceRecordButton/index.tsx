@@ -1,7 +1,6 @@
 import React, { useRef, useEffect, useState } from 'react';
 import {
   View,
-  Text,
   Animated,
   Vibration,
   Linking,
@@ -32,6 +31,7 @@ import {
   ButtonIcon,
 } from './states';
 import { deriveVoiceButtonState } from './derive';
+import { LivePreview } from './LivePreview';
 import { useWhisperStore } from '../../stores';
 import { useMicPermissionDenied } from '../../hooks/useMicPermissionDenied';
 import logger from '../../utils/logger';
@@ -455,13 +455,7 @@ export const VoiceRecordButton: React.FC<VoiceRecordButtonProps> = ({
   // ready/loading so the hold + slide + release gesture is continuous even through a cold load.
   return (
     <View style={styles.container}>
-      {isRecording && partialResult && (
-        <View style={styles.partialResultContainer}>
-          <Text style={styles.partialResultText} numberOfLines={1}>
-            {partialResult}
-          </Text>
-        </View>
-      )}
+      {isRecording && <LivePreview fallbackText={partialResult} />}
       {isRecording && (
         <ReanimatedAnimated.View style={[styles.rippleRing, rippleStyle]} />
       )}

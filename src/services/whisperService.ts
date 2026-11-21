@@ -7,6 +7,12 @@ import { noteMicPermissionRefused } from './micPermission';
 import { audioRecorderService } from './audioRecorderService';
 import { RecorderAudioStream } from './recorderAudioStream';
 import { cleanTranscription } from './whisperModels';
+import {
+  EMPTY_LIVE_TRANSCRIPT,
+  fromRealtimeSlices,
+  liveTranscriptText,
+  type LiveTranscript,
+} from '@offgrid/speech';
 import * as whisperModelFiles from './whisperModelFiles';
 import { whisperDecodeOptions } from './whisperDecodeOptions';
 import { RealtimeStartBarrier } from './realtimeStartBarrier';
@@ -79,6 +85,26 @@ class WhisperService {
 
   private notify(notice: string): void {
     this.noticeListeners.forEach(listener => listener(notice));
+  }
+
+  private live: LiveTranscript = EMPTY_LIVE_TRANSCRIPT;
+  private readonly liveListeners = new Set<(transcript: LiveTranscript) => void>();
+
+  /**
+   * Hear the live transcript while the person speaks: settled slices and the newest still a guess.
+   * Pushed straight to whoever draws it, so the composer does not re-render for every slice.
+   */
+  onLiveTranscript(listener: (transcript: LiveTranscript) => void): () => void {
+    this.liveListeners.add(listener);
+    listener(this.live);
+    return () => {
+      this.liveListeners.delete(listener);
+    };
+  }
+
+  private publishLive(transcript: LiveTranscript): void {
+    this.live = transcript;
+    this.liveListeners.forEach(listener => listener(transcript));
   }
 
   /** Wait for every earlier native job, then hold the context until the returned leave() is called. */
@@ -339,14 +365,11 @@ class WhisperService {
       }
 
       // The live preview, slice by slice. whisper.rn transcribes the speech in slices and re-sends a
-      // slice as it grows, so the preview is every slice's latest text in order.
+      // slice as it grows; @offgrid/speech turns that into one transcript (earlier slices settled,
+      // the newest a guess) so the phone and the desktop show and keep words the same way.
       const slices = new Map<number, string>();
-      const preview = () =>
-        [...slices.entries()]
-          .sort(([a], [b]) => a - b)
-          .map(([, text]) => text.trim())
-          .filter(Boolean)
-          .join(' ');
+      const preview = () => liveTranscriptText(fromRealtimeSlices(slices));
+      this.publishLive(EMPTY_LIVE_TRANSCRIPT);
 
       // The final transcript comes from the recording. The realtime transcriber drops the slice
       // still decoding when it stops, so the preview can miss the last words; the file pass hears
@@ -380,8 +403,10 @@ class WhisperService {
             slices.set(evt.sliceIndex, evt.data.result ?? '');
             // Shape only: the transcript is what the person said and never goes in the log.
             logger.log(`[WIRE-STT-REALTIME] ${JSON.stringify({ sliceIndex: evt.sliceIndex, textLength: evt.data.result?.length ?? 0, processTime: evt.processTime, recordingTime: evt.recordingTime })}`);
+            const live = fromRealtimeSlices(slices);
+            if (session === this.realtimeSession) this.publishLive(live);
             onResult({
-              text: preview(),
+              text: liveTranscriptText(live),
               isCapturing: true,
               processTime: evt.processTime || 0,
               recordingTime: evt.recordingTime || 0,
@@ -403,6 +428,8 @@ class WhisperService {
         // eslint-disable-next-line no-void
         void resolveFinalText(preview()).then(finalText => {
           endAnalytics('done');
+          // The words now live in the composer or the message.
+          if (session === this.realtimeSession) this.publishLive(EMPTY_LIVE_TRANSCRIPT);
           onResult({
             text: finalText,
             isCapturing: false,

@@ -715,6 +715,7 @@ export const FIXED_ACTION_IDS: readonly string[] = [
   "vision-repair-advice-dismiss",
   "vision-repair-advice-repair",
   "vision-repair-advice-result",
+  "voice-live-transcript",
   "voice-loading",
   "voice-mic-download-progress",
   "voice-model-kokoro",
