@@ -2,6 +2,9 @@ import { Buffer } from 'buffer';
 import { createHash } from 'node:crypto';
 import { Volume } from 'memfs';
 
+/** The image safety classifier the app bundles (src/services/contentSafety/imageSafety.ts). */
+const SHIPPED_SAFETY_MODEL = 'nsfw_384_xnnpack_fp32.pte';
+
 export interface NativeFileSystemOptions {
   documentDirectoryPath?: string;
   cachesDirectoryPath?: string;
@@ -136,6 +139,12 @@ export function createNativeFileSystemBoundary(
       MainBundlePath,
     ]) {
       volume.mkdirSync(directory, { recursive: true });
+    }
+    // Files the app ships inside itself: the image safety classifier is in the Android APK's
+    // assets/models (read with copyFileAssets) and in the iOS bundle (contentSafety/imageSafety.ts).
+    for (const shipped of [`models/${SHIPPED_SAFETY_MODEL}`, `${MainBundlePath}/${SHIPPED_SAFETY_MODEL}`]) {
+      volume.mkdirSync(parent(shipped), { recursive: true });
+      volume.writeFileSync(normalize(shipped), 'pte');
     }
     restoreModuleMocks();
   }
