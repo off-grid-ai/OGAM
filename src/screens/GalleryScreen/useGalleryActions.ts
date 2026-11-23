@@ -47,9 +47,9 @@ export const useGalleryActions = (conversationId: string | undefined) => {
             // A file on disk the store does not know has not been published: it passes the safety
             // check first (a blocked image whose delete failed must not come back this way).
             const remove = () => onnxImageGeneratorService.deleteGeneratedImage(img.id, img.imagePath);
-            if (!existingIds.has(img.id) && (await screenGeneratedImage(img.imagePath, remove))) {
-              addGeneratedImage(img);
-            }
+            if (existingIds.has(img.id) || !(await screenGeneratedImage(img.imagePath, remove))) continue;
+            // The generator may have published it (with its chat) while the check ran: keep that record.
+            if (!useAppStore.getState().generatedImages.some(stored => stored.id === img.id)) addGeneratedImage(img);
           }
         }
       } catch {
