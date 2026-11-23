@@ -1419,6 +1419,7 @@ export function installNativeBoundary(opts: InstallOpts = {}): NativeBoundary {
     frameAt: async (videoPath: string, _fraction: number, outputPath: string) => {
       if (!(await require('react-native-fs').exists(videoPath)))
         throw filmError('FILM_FRAME', 'The operation could not be completed.');
+      fsFake?.seedFile(outputPath, 4096);
       return outputPath;
     },
   };
