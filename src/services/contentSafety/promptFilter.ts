@@ -88,3 +88,7 @@ export const BLOCKED_PROMPT_MESSAGE =
   "Off Grid AI doesn't make sexual or nude images. Try a different description.";
 export const BLOCKED_IMAGE_MESSAGE =
   "This image was blocked because it may contain nudity or sexual content. Try a different description.";
+export const BLOCKED_VIDEO_PROMPT_MESSAGE =
+  "Off Grid AI doesn't make sexual or nude videos. Try a different description.";
+export const BLOCKED_VIDEO_MESSAGE =
+  "This video was blocked because it may contain nudity or sexual content. Try a different description.";
