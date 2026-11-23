@@ -17,9 +17,13 @@ type Fake = {
 
 let legacy: any;
 function freshModule() {
-  let mod!: typeof import('../../../../src/services/contentSafety');
+  let mod!: typeof import('../../../../src/services/contentSafety') &
+    typeof import('../../../../src/services/contentSafety/imageSafety');
   jest.isolateModules(() => {
-    mod = require('../../../../src/services/contentSafety');
+    mod = {
+      ...require('../../../../src/services/contentSafety'),
+      ...require('../../../../src/services/contentSafety/imageSafety'),
+    };
     legacy = require('react-native-executorch/legacy');
   });
   return mod;
