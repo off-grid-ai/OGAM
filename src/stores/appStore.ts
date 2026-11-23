@@ -563,7 +563,8 @@ export const useAppStore = create<AppState>()(
       },
       addGeneratedImage: image =>
         set(state => ({
-          generatedImages: [image, ...state.generatedImages],
+          // One entry per image: the Gallery's disk sync and the generator may both add the same one.
+          generatedImages: [image, ...state.generatedImages.filter(img => img.id !== image.id)],
         })),
       removeGeneratedImage: imageId =>
         set(state => ({
