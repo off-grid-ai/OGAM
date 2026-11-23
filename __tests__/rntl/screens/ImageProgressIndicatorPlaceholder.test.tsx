@@ -38,3 +38,15 @@ describe('ImageProgressIndicator placeholder glyph', () => {
     expect(queryByTestId('image-progress-placeholder-icon')).toBeNull();
   });
 });
+
+describe('ImageProgressIndicator preview before the safety check', () => {
+  it('shows the in-progress preview blurred: it has not been checked yet', () => {
+    const { UNCHECKED_PREVIEW_BLUR_RADIUS } = require('../../../src/services/contentSafety');
+    const { UNSAFE_getByType } = renderIndicator('file:///tmp/preview.png');
+    const { Image } = require('react-native');
+    const preview = UNSAFE_getByType(Image);
+    expect(preview.props.source).toEqual({ uri: 'file:///tmp/preview.png' });
+    expect(preview.props.blurRadius).toBe(UNCHECKED_PREVIEW_BLUR_RADIUS);
+    expect(UNCHECKED_PREVIEW_BLUR_RADIUS).toBeGreaterThanOrEqual(20);
+  });
+});

@@ -18,6 +18,7 @@ import { useGalleryActions } from './useGalleryActions';
 import { GalleryGridItem } from './GridItem';
 import { UnderlineTabs } from '../../components/UnderlineTabs';
 import { SCROLL_DEPTH_PROPS } from '../../constants/scrollDepth';
+import { UNCHECKED_PREVIEW_BLUR_RADIUS } from '../../services/contentSafety';
 
 type GalleryScreenRouteProp = RouteProp<RootStackParamList, 'Gallery'>;
 
@@ -199,6 +200,7 @@ export const GalleryScreen: React.FC = () => {
                 source={{ uri: imageGenState.previewPath }}
                 style={styles.genPreview}
                 resizeMode="cover"
+                blurRadius={UNCHECKED_PREVIEW_BLUR_RADIUS}
               />
             )}
             <View style={styles.genBannerInfo}>
