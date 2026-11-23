@@ -46,6 +46,10 @@ describe('image content safety — remote image model', () => {
     await t.h.tapSend('draw a nude woman');
 
     expect(await t.h.view!.findByText(t.BLOCKED_PROMPT_MESSAGE)).toBeTruthy();
+    // The card says the image was not made; it does not call it a load failure or offer Retry.
+    expect(t.h.view!.getByText('Image not made')).toBeTruthy();
+    expect(t.h.view!.queryByText(/Failed to load/)).toBeNull();
+    expect(t.h.view!.queryByText('Retry')).toBeNull();
     expect(server.requests).toBe(0);
     expect(t.h.view!.queryByTestId('generated-image')).toBeNull();
   });
@@ -55,6 +59,8 @@ describe('image content safety — remote image model', () => {
     await t.h.tapSend('draw a lighthouse at dusk');
 
     expect(await t.h.view!.findByText(t.BLOCKED_IMAGE_MESSAGE)).toBeTruthy();
+    expect(t.h.view!.getByText('Image not made')).toBeTruthy();
+    expect(t.h.view!.queryByText('Retry')).toBeNull();
     expect(server.requests).toBe(1);
     expect(t.classifier.classified).toHaveLength(1);
     expect(t.h.view!.queryByTestId('generated-image')).toBeNull();

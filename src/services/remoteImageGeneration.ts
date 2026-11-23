@@ -10,7 +10,7 @@ import {
   completedImageGenerationState,
   saveImageGenerationResult,
 } from './imageGenerationResult';
-import { BLOCKED_IMAGE_MESSAGE, screenGeneratedImage } from './contentSafety';
+import { BLOCKED_IMAGE_MESSAGE, ContentBlockedError, screenGeneratedImage } from './contentSafety';
 
 interface RemoteImageGenerationDeps {
   updateState: (state: Partial<ImageGenerationState>) => void;
@@ -153,7 +153,7 @@ export async function runRemoteImageGeneration(
     // No image reaches the screen, the Gallery or a chat before the on-device safety check.
     deps.updateState({ status: 'Checking image...' });
     const safe = await screenGeneratedImage(imagePath, () => removePartialFile(imagePath));
-    if (!safe) return deps.fail(BLOCKED_IMAGE_MESSAGE);
+    if (!safe) return deps.fail(BLOCKED_IMAGE_MESSAGE, new ContentBlockedError(BLOCKED_IMAGE_MESSAGE));
     if (deps.isCancelled()) {
       await removePartialFile(imagePath);
       return null;

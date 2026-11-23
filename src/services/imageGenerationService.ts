@@ -9,6 +9,7 @@ import { runRemoteImageGeneration } from './remoteImageGeneration';
 import {
   BLOCKED_IMAGE_MESSAGE,
   BLOCKED_PROMPT_MESSAGE,
+  ContentBlockedError,
   checkImagePrompt,
   screenGeneratedImage,
 } from './contentSafety';
@@ -159,7 +160,9 @@ class ImageGenerationService {
     // card's label uses (reasonFromLoadError) so the label and the eject can never
     // disagree — no second regex to drift.
     const memoryPressure = reasonFromLoadError(error) === 'insufficient-memory';
-    const onRetry = this._lastParams
+    // A request the safety check refused would be refused again: no Retry, and the title says so.
+    const blocked = opts?.cause instanceof ContentBlockedError;
+    const onRetry = this._lastParams && !blocked
       ? async () => {
           if (memoryPressure && !opts?.remote)
             await activeModelService.ejectAll().catch(() => {});
@@ -183,7 +186,9 @@ class ImageGenerationService {
     const drawFailed = failedWhileDrawing && !opts?.remote && !memoryPressure;
     reportModelFailure('image', opts?.cause ?? error, {
       message: error,
-      title: opts?.remote ? 'Remote image error' : drawFailed ? "Image model: Couldn't make the image" : undefined,
+      title: blocked
+        ? 'Image not made'
+        : opts?.remote ? 'Remote image error' : drawFailed ? "Image model: Couldn't make the image" : undefined,
       remote: opts?.remote,
       onRetry,
       onLoadAnyway,
@@ -369,7 +374,7 @@ class ImageGenerationService {
       this.updateState({ previewPath: null, status: 'Checking image...' });
       const removeImage = () => onnxImageGeneratorService.deleteGeneratedImage(result.id, result.imagePath);
       const safe = await screenGeneratedImage(result.imagePath, removeImage);
-      if (!safe) return this.failFor(job, BLOCKED_IMAGE_MESSAGE);
+      if (!safe) return this.failFor(job, BLOCKED_IMAGE_MESSAGE, { cause: new ContentBlockedError(BLOCKED_IMAGE_MESSAGE) });
       if (!this.isLive(job)) {
         await removeImage().catch(() => false);
         return this.resetFor(job);
@@ -473,14 +478,14 @@ class ImageGenerationService {
     params: GenerateImageParams,
     opts?: { override?: boolean },
   ): Promise<GeneratedImage | null> {
-    if (!this.promptAllowed(params.prompt)) return this.failFor(job, BLOCKED_PROMPT_MESSAGE);
+    if (!this.promptAllowed(params.prompt)) return this.failFor(job, BLOCKED_PROMPT_MESSAGE, { cause: new ContentBlockedError(BLOCKED_PROMPT_MESSAGE) });
     const remoteServer = useRemoteServerStore
       .getState()
       .getActiveRemoteMediaServer('image');
     if (remoteServer?.mediaModels?.image) {
       const enhancedPrompt = await this._enhancePrompt(job, params);
       if (!this.isLive(job)) return this.resetFor(job);
-      if (!this.promptAllowed(enhancedPrompt)) return this.failFor(job, BLOCKED_PROMPT_MESSAGE);
+      if (!this.promptAllowed(enhancedPrompt)) return this.failFor(job, BLOCKED_PROMPT_MESSAGE, { cause: new ContentBlockedError(BLOCKED_PROMPT_MESSAGE) });
       return runRemoteImageGeneration(params, remoteServer, {
         updateState: state => this.updateFor(job, state),
         fail: (message, cause) => this.failFor(job, message, { cause, remote: true }),
@@ -533,7 +538,7 @@ class ImageGenerationService {
     // continue into the image model after the user already pressed X.
     if (!this.isLive(job)) return this.resetFor(job);
     // The enhancer and the style add words of their own: they pass the same filter.
-    if (!this.promptAllowed(enhancedPrompt)) return this.failFor(job, BLOCKED_PROMPT_MESSAGE);
+    if (!this.promptAllowed(enhancedPrompt)) return this.failFor(job, BLOCKED_PROMPT_MESSAGE, { cause: new ContentBlockedError(BLOCKED_PROMPT_MESSAGE) });
 
     // Establish the generating state unconditionally — not only when enhancement
     // is off. When enhancement is ON but _enhancePrompt bailed early (e.g. no text

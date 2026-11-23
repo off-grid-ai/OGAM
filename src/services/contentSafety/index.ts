@@ -18,6 +18,17 @@ export const UNCHECKED_PREVIEW_BLUR_RADIUS = 20;
 export type { ImageVerdict } from './imageSafety';
 
 /**
+ * The cause of a failure the safety check made on purpose. The failure card says the image was not
+ * made and why, and offers no Retry: the same request would be refused again.
+ */
+export class ContentBlockedError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'ContentBlockedError';
+  }
+}
+
+/**
  * Check a finished image. When it is blocked its file is deleted here, so no caller can publish it.
  * Returns whether the image may be shown.
  */
