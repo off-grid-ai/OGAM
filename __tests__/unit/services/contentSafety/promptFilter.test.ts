@@ -64,6 +64,18 @@ describe('checkImagePrompt', () => {
     allowed('roast chicken breast with herbs');
   });
 
+  it('matches listed terms that contain digits', () => {
+    blocked('rule34 anime girl');
+    blocked('r34 art');
+  });
+
+  it('is not fooled by terminal punctuation or dots between words', () => {
+    blocked('portrait, nude!');
+    blocked('woman showing her private.parts');
+    blocked('naked.');
+    allowed('Hello! A cat on a mat.');
+  });
+
   it('matches across punctuation between words', () => {
     blocked('woman,naked,beach');
     blocked('(nude:1.4), masterpiece');

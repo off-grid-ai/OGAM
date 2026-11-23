@@ -39,9 +39,6 @@ const SWAPS: Record<string, string> = {
   '0': 'o', '1': 'i', '3': 'e', '4': 'a', '5': 's', '7': 't', '8': 'b', '@': 'a', '$': 's', '!': 'i',
 };
 
-const WORDS = new Set<string>(BLOCKED_WORDS);
-const PHRASES = BLOCKED_PHRASES.map(phrase => foldWords(phrase).join(' '));
-
 /** Fold one word: swaps undone, everything but letters and digits removed. */
 function foldWord(raw: string): string {
   return raw
@@ -51,16 +48,34 @@ function foldWord(raw: string): string {
     .replace(/[^a-z0-9]/g, '');
 }
 
+/** Lower case, accents removed. */
+function plain(text: string): string {
+  return text.normalize('NFKD').replace(/[̀-ͯ]/g, '').toLowerCase();
+}
+
+const SEPARATORS = /[\s,;:/\\|()[\]{}"'`?<>+=_~^&#%*-]+/;
+
 /** The text as folded words. A word is a run of characters between spaces, commas and the like. */
 function foldWords(text: string): string[] {
-  return text
-    .normalize('NFKD')
-    .replace(/[̀-ͯ]/g, '')
-    .toLowerCase()
-    .split(/[\s,;:/\\|()[\]{}"'`?<>+=_~^&#%*-]+/)
-    .map(foldWord)
-    .filter(Boolean);
+  return plain(text).split(SEPARATORS).map(foldWord).filter(Boolean);
 }
+
+/**
+ * Other readings of the same text, so punctuation cannot hide a word: symbols dropped instead of
+ * swapped ("nude!" stays nude), and dots and other marks read as spaces ("private.parts").
+ */
+function readings(text: string): string[][] {
+  const lower = plain(text);
+  return [
+    foldWords(text),
+    lower.split(SEPARATORS).map(word => word.replace(/[^a-z0-9]/g, '')).filter(Boolean),
+    lower.split(/[^a-z0-9]+/).filter(Boolean),
+  ];
+}
+
+// Built with the same folding as prompts, so listed terms with digits (rule34, r34) still match.
+const WORDS = new Set<string>(BLOCKED_WORDS.flatMap(word => [word, foldWord(word)]));
+const PHRASES = BLOCKED_PHRASES.map(phrase => foldWords(phrase).join(' '));
 
 export interface PromptVerdict {
   allowed: boolean;
@@ -71,7 +86,14 @@ export interface PromptVerdict {
 /** Whether an image prompt may go to an image model. */
 export function checkImagePrompt(text: string | null | undefined): PromptVerdict {
   if (!text) return { allowed: true };
-  const words = foldWords(text);
+  for (const words of readings(text)) {
+    const verdict = checkWords(words);
+    if (!verdict.allowed) return verdict;
+  }
+  return { allowed: true };
+}
+
+function checkWords(words: string[]): PromptVerdict {
   for (const word of words) {
     if (WORDS.has(word)) return { allowed: false, match: word };
     // A plural or verb ending on a blocked word ("nudes", "boobies" are listed; this catches the rest).
