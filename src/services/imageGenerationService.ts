@@ -6,6 +6,12 @@ import logger from '../utils/logger';
 import { generateId } from '../utils/generateId';
 import { useRemoteServerStore } from '../stores/remoteServerStore';
 import { runRemoteImageGeneration } from './remoteImageGeneration';
+import {
+  BLOCKED_IMAGE_MESSAGE,
+  BLOCKED_PROMPT_MESSAGE,
+  checkImagePrompt,
+  screenGeneratedImage,
+} from './contentSafety';
 import { resolveMobileImageParameters } from './imageParameterPolicy';
 import {
   generationProgressStatus,
@@ -359,6 +365,15 @@ class ImageGenerationService {
         }
         return this.resetFor(job);
       }
+      // No image reaches the screen, the Gallery or a chat before the on-device safety check.
+      this.updateState({ previewPath: null, status: 'Checking image...' });
+      const removeImage = () => onnxImageGeneratorService.deleteGeneratedImage(result.id, result.imagePath);
+      const safe = await screenGeneratedImage(result.imagePath, removeImage);
+      if (!safe) return this.failFor(job, BLOCKED_IMAGE_MESSAGE);
+      if (!this.isLive(job)) {
+        await removeImage().catch(() => false);
+        return this.resetFor(job);
+      }
       // Publish the result message BEFORE announcing 'done': whoever reacts to 'done' (voice mode
       // speaks the finished turn) reads the chat, and the reply must already be in it.
       const saved = saveImageGenerationResult(result, {
@@ -437,6 +452,13 @@ class ImageGenerationService {
     }
   }
 
+  /** Whether a prompt may go to an image model (contentSafety). */
+  private promptAllowed(prompt: string): boolean {
+    const verdict = checkImagePrompt(prompt);
+    if (!verdict.allowed) logger.warn(`[ContentSafety] prompt blocked (${verdict.match})`);
+    return verdict.allowed;
+  }
+
   /** The image route this request will use, in the spec's terms. */
   private analyticsFacts(): ModelFacts {
     if (useRemoteServerStore.getState().getActiveRemoteMediaServer('image')?.mediaModels?.image) {
@@ -451,12 +473,14 @@ class ImageGenerationService {
     params: GenerateImageParams,
     opts?: { override?: boolean },
   ): Promise<GeneratedImage | null> {
+    if (!this.promptAllowed(params.prompt)) return this.failFor(job, BLOCKED_PROMPT_MESSAGE);
     const remoteServer = useRemoteServerStore
       .getState()
       .getActiveRemoteMediaServer('image');
     if (remoteServer?.mediaModels?.image) {
       const enhancedPrompt = await this._enhancePrompt(job, params);
       if (!this.isLive(job)) return this.resetFor(job);
+      if (!this.promptAllowed(enhancedPrompt)) return this.failFor(job, BLOCKED_PROMPT_MESSAGE);
       return runRemoteImageGeneration(params, remoteServer, {
         updateState: state => this.updateFor(job, state),
         fail: (message, cause) => this.failFor(job, message, { cause, remote: true }),
@@ -508,6 +532,8 @@ class ImageGenerationService {
     // Stop can arrive while prompt enhancement owns the text engine. Do not clear that request and
     // continue into the image model after the user already pressed X.
     if (!this.isLive(job)) return this.resetFor(job);
+    // The enhancer and the style add words of their own: they pass the same filter.
+    if (!this.promptAllowed(enhancedPrompt)) return this.failFor(job, BLOCKED_PROMPT_MESSAGE);
 
     // Establish the generating state unconditionally — not only when enhancement
     // is off. When enhancement is ON but _enhancePrompt bailed early (e.g. no text
