@@ -99,3 +99,53 @@ describe('image content safety — phone image model', () => {
     expect(t.assistantMessages()).toHaveLength(1);
   });
 });
+
+describe('image content safety — images the Gallery could pick up later', () => {
+  const until = async (check: () => boolean) => {
+    for (let i = 0; i < 200 && !check(); i += 1) await new Promise(resolve => setTimeout(resolve, 5));
+  };
+
+  async function cancelWithFailedDelete(nsfw: number) {
+    const t = await setup({ nsfw });
+    const del = t.boundary.diffusion.module.deleteGeneratedImage;
+    t.boundary.diffusion.holdNextGeneration();
+    const making = t.imageGenerationService.generateImage({ prompt: 'a person at the beach', conversationId: t.conversationId });
+    await until(() => t.boundary.diffusion.generationHeld());
+    // Stop is pressed, and the phone cannot remove the image the engine still writes.
+    del.mockResolvedValueOnce(false);
+    await t.imageGenerationService.cancelGeneration();
+    t.boundary.diffusion.releaseGeneration();
+    await making;
+    return t;
+  }
+
+  it('a stopped image the phone could not remove is checked, and a marked one never reaches the Gallery', async () => {
+    const t = await cancelWithFailedDelete(0.95);
+    expect(t.classifier.classified).toHaveLength(1);
+    expect(t.useAppStore.getState().generatedImages).toHaveLength(0);
+    expect(t.boundary.diffusion.module.deleteGeneratedImage).toHaveBeenCalledTimes(2);
+  });
+
+  it('a stopped image the phone could not remove is kept in the Gallery once it passes', async () => {
+    const t = await cancelWithFailedDelete(0.02);
+    expect(t.classifier.classified).toHaveLength(1);
+    expect(t.useAppStore.getState().generatedImages).toHaveLength(1);
+  });
+
+  it('the Gallery adds an image found on disk only after it passes the check', async () => {
+    const t = await setup({ nsfw: 0.9 });
+    const docs = t.fs.module.DocumentDirectoryPath;
+    const image = (id: string) => ({ id, prompt: 'p', imagePath: `${docs}/generated_images/${id}.png`, width: 512, height: 512, steps: 8, seed: 1, modelId: 'sd', createdAt: '2026-11-23T00:00:00.000Z' });
+    t.fs.seedFile(`${docs}/generated_images/left-behind.png`, 1024);
+    t.boundary.diffusion.seedGeneratedImages([image('left-behind')]);
+    // The same React the app modules loaded (the harness gives each test a fresh registry).
+    const { renderHook, waitFor } = require('@testing-library/react-native/pure');
+    const { useGalleryActions } = require('../../../src/screens/GalleryScreen/useGalleryActions');
+    const gallery = renderHook(() => useGalleryActions(undefined));
+    await waitFor(() => expect(t.classifier.classified).toHaveLength(1));
+    await waitFor(() => expect(t.boundary.diffusion.module.deleteGeneratedImage).toHaveBeenCalledWith('left-behind'));
+    expect(t.useAppStore.getState().generatedImages).toHaveLength(0);
+    expect(await t.fs.module.exists(`${docs}/generated_images/left-behind.png`)).toBe(false);
+    gallery.unmount();
+  });
+});

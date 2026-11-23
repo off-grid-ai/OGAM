@@ -357,17 +357,7 @@ class ImageGenerationService {
         },
       );
       if (!this.isLive(job) || !result?.imagePath) {
-        if (result?.imagePath) {
-          const removed = await onnxImageGeneratorService
-            .deleteGeneratedImage(result.id, result.imagePath)
-            .catch(() => false);
-          if (!removed) {
-            result.modelId = activeImageModel.id;
-            if (params.conversationId) result.conversationId = params.conversationId;
-            useAppStore.getState().addGeneratedImage(result);
-            logger.warn('[ImageGen] could not remove a cancelled image; kept in Gallery');
-          }
-        }
+        if (result?.imagePath) await this.discardStopped(result, activeImageModel.id, params.conversationId);
         return this.resetFor(job);
       }
       // No image reaches the screen, the Gallery or a chat before the on-device safety check.
@@ -587,6 +577,17 @@ class ImageGenerationService {
     if (job?.conversationId !== conversationId) return;
     await this.cancelGeneration();
     await job.settled;
+  }
+
+  /** A stopped image is removed; one the phone cannot remove is kept only once it passes the check. */
+  private async discardStopped(result: GeneratedImage, modelId: string, conversationId?: string): Promise<void> {
+    const remove = () => onnxImageGeneratorService.deleteGeneratedImage(result.id, result.imagePath);
+    const removed = await remove().catch(() => false);
+    if (removed || !(await screenGeneratedImage(result.imagePath, remove))) return;
+    result.modelId = modelId;
+    if (conversationId) result.conversationId = conversationId;
+    useAppStore.getState().addGeneratedImage(result);
+    logger.warn('[ImageGen] could not remove a cancelled image; kept in Gallery');
   }
 
   async cancelGeneration(): Promise<void> {
