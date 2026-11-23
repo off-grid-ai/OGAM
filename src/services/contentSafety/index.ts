@@ -7,15 +7,13 @@ import logger from '../../utils/logger';
 import { checkGeneratedImage } from './imageSafety';
 
 export { checkImagePrompt, BLOCKED_IMAGE_MESSAGE, BLOCKED_PROMPT_MESSAGE } from './promptFilter';
-export type { PromptVerdict } from './promptFilter';
-export { checkGeneratedImage, NSFW_THRESHOLD } from './imageSafety';
+export { checkGeneratedImage } from './imageSafety';
 
 /**
  * In-progress previews have not been checked yet, so they show blurred: the shape of the picture
  * coming together, never its detail. (Android caps the radius at 25.)
  */
 export const UNCHECKED_PREVIEW_BLUR_RADIUS = 20;
-export type { ImageVerdict } from './imageSafety';
 
 /**
  * The cause of a failure the safety check made on purpose. The failure card says the image was not

@@ -57,8 +57,7 @@ describe('checkGeneratedImage', () => {
 
   it('blocks at the line', async () => {
     setFake({ nsfw: 0.5 });
-    const { checkGeneratedImage, NSFW_THRESHOLD } = freshModule();
-    expect(NSFW_THRESHOLD).toBe(0.5);
+    const { checkGeneratedImage } = freshModule();
     await expect(checkGeneratedImage('/a.png')).resolves.toEqual({ allowed: false, nsfw: 0.5, reason: 'nsfw' });
   });
 

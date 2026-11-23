@@ -4,8 +4,8 @@
  */
 import { checkImagePrompt } from '../../../../src/services/contentSafety/promptFilter';
 
-const blocked = (text: string) => expect(checkImagePrompt(text).allowed).toBe(false);
-const allowed = (text: string) => expect(checkImagePrompt(text)).toEqual({ allowed: true });
+const blocked = (text: string | null | undefined) => expect(checkImagePrompt(text).allowed).toBe(false);
+const allowed = (text: string | null | undefined) => expect(checkImagePrompt(text)).toEqual({ allowed: true });
 
 describe('checkImagePrompt', () => {
   it('passes ordinary prompts', () => {

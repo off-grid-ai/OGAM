@@ -18,10 +18,10 @@ import { ClassificationModule, initExecutorch } from 'react-native-executorch/le
 import { BareResourceFetcher } from 'react-native-executorch-bare-resource-fetcher';
 import logger from '../../utils/logger';
 
-export const SAFETY_MODEL_FILENAME = 'nsfw_384_xnnpack_fp32.pte';
+const SAFETY_MODEL_FILENAME = 'nsfw_384_xnnpack_fp32.pte';
 
 /** At or above this NSFW confidence the image is blocked. The model's own decision line is 0.5. */
-export const NSFW_THRESHOLD = 0.5;
+const NSFW_THRESHOLD = 0.5;
 
 const LABELS = { NSFW: 0, SFW: 1 } as const;
 const PREPROCESS = { normMean: [0.5, 0.5, 0.5], normStd: [0.5, 0.5, 0.5] };
