@@ -7,7 +7,6 @@ import logger from '../../utils/logger';
 import { checkGeneratedImage } from './imageSafety';
 
 export { checkImagePrompt, BLOCKED_IMAGE_MESSAGE, BLOCKED_PROMPT_MESSAGE } from './promptFilter';
-export { checkGeneratedImage } from './imageSafety';
 
 /**
  * In-progress previews have not been checked yet, so they show blurred: the shape of the picture
