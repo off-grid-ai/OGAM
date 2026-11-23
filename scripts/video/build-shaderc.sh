@@ -24,7 +24,7 @@ cmake -S "$SOURCE" -B "$SOURCE/build-host" -G "Unix Makefiles" \
   -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX="$PREFIX" \
   -DSHADERC_SKIP_TESTS=ON -DSHADERC_SKIP_EXAMPLES=ON -DSHADERC_SKIP_COPYRIGHT_CHECK=ON
 # Target glslc is the static library; glslc_exe is the command-line compiler (output name glslc).
-cmake --build "$SOURCE/build-host" --target glslc_exe --parallel "${VIDEO_BUILD_JOBS:-4}"
+cmake --build "$SOURCE/build-host" --target glslc_exe --parallel "${VIDEO_BUILD_JOBS:-$(getconf _NPROCESSORS_ONLN)}"
 mkdir -p "$PREFIX/bin"
 cp "$SOURCE/build-host/glslc/glslc" "$PREFIX/bin/glslc"
 printf '%s\n' "$REVISION" > "$PREFIX/revision"
