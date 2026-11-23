@@ -15,7 +15,8 @@ const BLOCKED_WORDS = [
   'nsfw', 'porn', 'porno', 'pornographic', 'pornography', 'hentai', 'ecchi', 'xxx',
   'sex', 'sexy', 'sexual', 'sexually', 'intercourse', 'orgasm', 'erotic', 'erotica', 'explicit',
   'nipple', 'nipples', 'areola', 'areolas', 'breasts', 'boobs', 'tits', 'titties', 'cleavage',
-  'genitals', 'genitalia', 'vagina', 'vulva', 'penis', 'cock', 'dick', 'pussy', 'clit', 'clitoris',
+  'genital', 'genitals', 'genitalia', 'vagina', 'labia', 'pubic', 'pubes', 'crotch', 'phallus', 'phallic',
+  'undress', 'undressing', 'vulva', 'penis', 'cock', 'dick', 'pussy', 'clit', 'clitoris',
   'testicles', 'scrotum', 'anus', 'butthole', 'buttocks',
   'blowjob', 'handjob', 'cumshot', 'cum', 'creampie', 'masturbate', 'masturbating', 'masturbation',
   'fellatio', 'cunnilingus', 'bukkake', 'gangbang', 'threesome', 'orgy', 'bdsm', 'bondage',
@@ -31,6 +32,7 @@ const BLOCKED_PHRASES = [
   'see-through', 'wet t shirt', 'spread legs', 'legs spread', 'bare chest woman', 'bare breasts',
   'bare butt', 'bare bottom', 'full frontal', 'in the nude', 'birthday suit', 'sex scene',
   'having sex', 'making love', 'adult content', 'adult only', 'not safe for work', 'only fans',
+  'private parts', 'private part', 'intimate parts', 'bare breast', 'exposed breast', 'exposed breasts',
 ] as const;
 
 const SWAPS: Record<string, string> = {

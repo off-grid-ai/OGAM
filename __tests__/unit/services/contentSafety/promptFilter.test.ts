@@ -52,6 +52,18 @@ describe('checkImagePrompt', () => {
     allowed('a woman with new clothes');
   });
 
+  it('blocks genital words and phrases in any form', () => {
+    blocked('a drawing of male genitalia');
+    blocked('close up of genital area');
+    blocked('woman showing her private parts');
+    blocked('labia close up');
+    blocked('pubic hair');
+    blocked('focus on the crotch');
+    blocked('woman undressing');
+    blocked('exposed breast');
+    allowed('roast chicken breast with herbs');
+  });
+
   it('matches across punctuation between words', () => {
     blocked('woman,naked,beach');
     blocked('(nude:1.4), masterpiece');
