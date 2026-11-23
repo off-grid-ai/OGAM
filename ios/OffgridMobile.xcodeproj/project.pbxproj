@@ -16,7 +16,6 @@
 		0A7B3D032F3A0B1200CC5FA1 /* PDFExtractorModule.m in Sources */ = {isa = PBXBuildFile; fileRef = 0A7B3D012F3A0B1200CC5FA1 /* PDFExtractorModule.m */; };
 		0A7B3D042F3A0B1200CC5FA1 /* PDFExtractorModule.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A7B3D022F3A0B1200CC5FA1 /* PDFExtractorModule.swift */; };
 		0A7B3D062F3A0B1200CC5FA1 /* all-MiniLM-L6-v2-Q8_0.gguf in Resources */ = {isa = PBXBuildFile; fileRef = 0A7B3D052F3A0B1200CC5FA1 /* all-MiniLM-L6-v2-Q8_0.gguf */; };
-		E29F58BAB90929BB7573C306 /* nsfw_384_xnnpack_fp32.pte in Resources */ = {isa = PBXBuildFile; fileRef = 68FDA03D378DB8834FB8D787 /* nsfw_384_xnnpack_fp32.pte */; };
 		0A7B3D072F3A0B1200CC5FA1 /* EmbeddingModelBundleTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A7B3D082F3A0B1200CC5FA1 /* EmbeddingModelBundleTests.swift */; };
 		0A7B3D092F3A0B1200CC5FA1 /* DownloadManagerModuleTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A7B3D0A2F3A0B1200CC5FA1 /* DownloadManagerModuleTests.swift */; };
 		0ADE3D052F3A0B1200CC5FA1 /* DeviceMemoryModule.m in Sources */ = {isa = PBXBuildFile; fileRef = 0ADE3D012F3A0B1200CC5FA1 /* DeviceMemoryModule.m */; };
@@ -52,6 +51,7 @@
 		97DD2D1E2098E2A67897A8BD /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 89A9465C6CE2C9FA4CF5E01B /* Foundation.framework */; };
 		A084C602C3B4A415DC74D43F /* libPods-OffgridMobile.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 3A3BA1A946E10FA48AA4C0EB /* libPods-OffgridMobile.a */; };
 		AABB000100000000000001AA /* OffgridMobileTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABB000200000000000002AA /* OffgridMobileTests.swift */; };
+		E29F58BAB90929BB7573C306 /* nsfw_384_xnnpack_fp32.pte in Resources */ = {isa = PBXBuildFile; fileRef = 68FDA03D378DB8834FB8D787 /* nsfw_384_xnnpack_fp32.pte */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -94,7 +94,6 @@
 		0A7B3D012F3A0B1200CC5FA1 /* PDFExtractorModule.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = PDFExtractorModule.m; sourceTree = "<group>"; };
 		0A7B3D022F3A0B1200CC5FA1 /* PDFExtractorModule.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PDFExtractorModule.swift; sourceTree = "<group>"; };
 		0A7B3D052F3A0B1200CC5FA1 /* all-MiniLM-L6-v2-Q8_0.gguf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "all-MiniLM-L6-v2-Q8_0.gguf"; sourceTree = "<group>"; };
-		68FDA03D378DB8834FB8D787 /* nsfw_384_xnnpack_fp32.pte */ = {isa = PBXFileReference; lastKnownFileType = file; path = "nsfw_384_xnnpack_fp32.pte"; sourceTree = "<group>"; };
 		0A7B3D082F3A0B1200CC5FA1 /* EmbeddingModelBundleTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmbeddingModelBundleTests.swift; sourceTree = "<group>"; };
 		0A7B3D0A2F3A0B1200CC5FA1 /* DownloadManagerModuleTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DownloadManagerModuleTests.swift; sourceTree = "<group>"; };
 		0ADE3D012F3A0B1200CC5FA1 /* DeviceMemoryModule.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = DeviceMemoryModule.m; sourceTree = "<group>"; };
@@ -130,6 +129,7 @@
 		3A3BA1A946E10FA48AA4C0EB /* libPods-OffgridMobile.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-OffgridMobile.a"; sourceTree = BUILT_PRODUCTS_DIR; };
 		5C1B00032F44000100C11A00 /* ScribeEntryModule.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = ScribeEntryModule.m; sourceTree = "<group>"; };
 		5C1B00042F44000100C11A00 /* ScribeEntryModule.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScribeEntryModule.swift; sourceTree = "<group>"; };
+		68FDA03D378DB8834FB8D787 /* nsfw_384_xnnpack_fp32.pte */ = {isa = PBXFileReference; lastKnownFileType = file; path = nsfw_384_xnnpack_fp32.pte; sourceTree = "<group>"; };
 		761780EC2CA45674006654EE /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppDelegate.swift; path = OffgridMobile/AppDelegate.swift; sourceTree = "<group>"; };
 		81AB9BB72411601600AC10FF /* LaunchScreen.storyboard */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.storyboard; name = LaunchScreen.storyboard; path = OffgridMobile/LaunchScreen.storyboard; sourceTree = "<group>"; };
 		89A9465C6CE2C9FA4CF5E01B /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS18.0.sdk/System/Library/Frameworks/Foundation.framework; sourceTree = DEVELOPER_DIR; };
