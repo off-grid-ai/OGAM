@@ -468,7 +468,11 @@ class ImageGenerationService {
     params: GenerateImageParams,
     opts?: { override?: boolean },
   ): Promise<GeneratedImage | null> {
-    if (!this.promptAllowed(params.prompt)) return this.failFor(job, BLOCKED_PROMPT_MESSAGE, { cause: new ContentBlockedError(BLOCKED_PROMPT_MESSAGE) });
+    if (!this.promptAllowed(params.prompt)) {
+      // The refusal belongs to this request: nothing of the previous image stays in the state.
+      this.updateFor(job, { prompt: params.prompt, conversationId: params.conversationId || null, messageId: null, result: null });
+      return this.failFor(job, BLOCKED_PROMPT_MESSAGE, { cause: new ContentBlockedError(BLOCKED_PROMPT_MESSAGE) });
+    }
     const remoteServer = useRemoteServerStore
       .getState()
       .getActiveRemoteMediaServer('image');

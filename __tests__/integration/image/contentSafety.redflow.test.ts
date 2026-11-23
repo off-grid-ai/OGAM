@@ -57,6 +57,15 @@ describe('image content safety — phone image model', () => {
     expect(t.assistantMessages()).toHaveLength(0);
   });
 
+  it('a refused prompt after a finished image leaves nothing of that image in the state', async () => {
+    const t = await setup({ nsfw: 0.02 });
+    await t.imageGenerationService.generateImage({ prompt: 'a lighthouse at dusk', conversationId: t.conversationId });
+    await t.imageGenerationService.generateImage({ prompt: 'a nude woman' });
+    expect(t.imageGenerationService.getState()).toMatchObject({
+      phase: 'error', prompt: 'a nude woman', conversationId: null, messageId: null, result: null,
+    });
+  });
+
   it('refuses when the style adds a blocked word', async () => {
     const t = await setup();
     await t.imageGenerationService.generateImage({ prompt: 'a portrait', styleWords: 'nsfw, detailed', conversationId: t.conversationId });
