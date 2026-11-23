@@ -159,7 +159,8 @@
       "xnnpack"
     ],
     "libs": [
-      "phonemis"
+      "phonemis",
+      "opencv"
     ]
   },
   "overrides": {
