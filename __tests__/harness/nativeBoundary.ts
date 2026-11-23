@@ -1396,6 +1396,33 @@ export function installNativeBoundary(opts: InstallOpts = {}): NativeBoundary {
   RN.NativeModules.VideoManager = new Proxy({}, { get: () => jest.fn(() => Promise.resolve()) });
   // The system share sheet: what was handed to it (a file path and its type).
   RN.NativeModules.MediaShareModule = { shareFile: jest.fn(async () => true) };
+  // The film module (pro/native/film: OffgridFilm) ships in every build. A test that installs the full
+  // engine fake (nativeVideoEngine) replaces this one. Here, as on the device, frameAt (the content
+  // safety check's sampler) reads a frame only from a clip on the disk; there is no film joining, and
+  // lastFrame finds nothing, so thumbnails stay as they were.
+  const filmError = (code: string, message: string) => Object.assign(new Error(message), { code });
+  RN.NativeModules.OffgridFilm = {
+    addListener: () => undefined,
+    removeListeners: () => undefined,
+    beginSession: async () => null,
+    updateSession: async () => null,
+    endSession: async () => null,
+    cancel: async () => null,
+    notifyReady: async () => null,
+    askToNotify: async () => true,
+    compose: async () => {
+      throw filmError('FILM_FAILED', 'This build cannot join films yet.');
+    },
+    lastFrame: async () => {
+      throw filmError('FILM_FRAME', 'The operation could not be completed.');
+    },
+    frameAt: async (videoPath: string, _fraction: number, outputPath: string) => {
+      if (!(await require('react-native-fs').exists(videoPath)))
+        throw filmError('FILM_FRAME', 'The operation could not be completed.');
+      fsFake?.seedFile(outputPath, 4096);
+      return outputPath;
+    },
+  };
   if (opts.socModel) {
     const socModel = opts.socModel;
     diffusion.module.getSoCModel = jest.fn(async () => socModel);

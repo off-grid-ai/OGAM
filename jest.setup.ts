@@ -419,6 +419,25 @@ jest.mock('react-native-executorch/legacy', () => ({
   KOKORO_HINDI_MALE_PSI: mockKokoroConfig('hm_psi', 'hi'),
   KOKORO_POLISH_MALE_MATEUSZ: mockKokoroConfig('pm_mateusz', 'pl'),
   KOKORO_GERMAN_FEMALE_ANNA: mockKokoroConfig('df_anna', 'de'),
+  // The image safety classifier (contentSafety/imageSafety.ts) at the executorch native boundary.
+  // Default: every image scores safe. A test sets globalThis.__nsfwClassifier to change the score,
+  // make loading fail, or read which images were classified.
+  ClassificationModule: {
+    fromCustomModel: jest.fn(async (modelSource: string) => {
+      const fake = (globalThis as any).__nsfwClassifier ?? {};
+      if (fake.loadError) throw fake.loadError;
+      fake.loadedFrom?.push?.(modelSource);
+      return {
+        forward: jest.fn(async (uri: string) => {
+          fake.classified?.push?.(uri);
+          if (fake.forwardError) throw fake.forwardError;
+          const nsfw = typeof fake.nsfw === 'number' ? fake.nsfw : 0.01;
+          return { NSFW: nsfw, SFW: 1 - nsfw };
+        }),
+        delete: jest.fn(() => { fake.deleted = (fake.deleted ?? 0) + 1; }),
+      };
+    }),
+  },
 }));
 
 // react-native-executorch-bare-resource-fetcher mock.

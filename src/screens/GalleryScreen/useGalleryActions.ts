@@ -5,6 +5,7 @@ import { imageGenerationService, onnxImageGeneratorService } from '../../service
 import type { ImageGenerationState } from '../../services';
 import { GeneratedImage } from '../../types';
 import { deleteGalleryImage } from './galleryMedia';
+import { screenGeneratedImage } from '../../services/contentSafety';
 
 export const formatDate = (dateStr: string): string => {
   const ts = Number(dateStr);
@@ -43,9 +44,12 @@ export const useGalleryActions = (conversationId: string | undefined) => {
           const { generatedImages: storeImages, addGeneratedImage } = useAppStore.getState();
           const existingIds = new Set(storeImages.map(img => img.id));
           for (const img of diskImages) {
-            if (!existingIds.has(img.id)) {
-              addGeneratedImage(img);
-            }
+            // A file on disk the store does not know has not been published: it passes the safety
+            // check first (a blocked image whose delete failed must not come back this way).
+            const remove = () => onnxImageGeneratorService.deleteGeneratedImage(img.id, img.imagePath);
+            if (existingIds.has(img.id) || !(await screenGeneratedImage(img.imagePath, remove))) continue;
+            // The generator may have published it (with its chat) while the check ran: keep that record.
+            if (!useAppStore.getState().generatedImages.some(stored => stored.id === img.id)) addGeneratedImage(img);
           }
         }
       } catch {

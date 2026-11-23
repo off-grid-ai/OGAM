@@ -9,8 +9,8 @@
  * `getVideoStatus(path)` reports the last job; getConstants() says it can start from a picture.
  *
  * OffgridFilm (pro/native/film/android/.../FilmModule.kt): `compose(input)` writes the film at
- * `input.outputPath` and resolves { path, durationSeconds }; `lastFrame(video, out)` writes a PNG and
- * resolves its path; the session calls keep a long render alive and resolve null.
+ * `input.outputPath` and resolves { path, durationSeconds }; `lastFrame(video, out)` and
+ * `frameAt(video, fraction, out)` (the content safety check's sampler) write a PNG and resolve its path; the session calls keep a long render alive and resolve null.
  *
  * `hold()` parks the next clip after its first sampling step, so a test can see it in flight;
  * `release()` lets it finish. `failNext(message)` makes the next clip fail as the engine reports it.
@@ -24,6 +24,8 @@ import type { NativeBoundary } from './nativeBoundary';
 export interface NativeVideoEngine {
   /** Every generate input the engine received. */
   generations: Array<Record<string, unknown>>;
+  /** Every frame the safety check read: the clip and where in it (0..1). */
+  frameReads: Array<{ videoPath: string; fraction: number }>;
   /** Every film the composer joined. */
   films: Array<{ clips: Array<{ path: string; caption?: string }>; outputPath: string }>;
   hold: () => void;
@@ -86,6 +88,7 @@ export function installNativeVideoEngine(boundary: NativeBoundary, carryOver?: N
   const engine: NativeVideoEngine = {
     generations: carryOver?.generations ?? [],
     films: carryOver?.films ?? [],
+    frameReads: carryOver?.frameReads ?? [],
     hold: () => {
       core.holdNext = true;
     },
@@ -238,6 +241,12 @@ export function installNativeVideoEngine(boundary: NativeBoundary, carryOver?: N
       engine.films.push(input);
       core.fs.seedFile(input.outputPath, 256 * 1024);
       return { path: input.outputPath, durationSeconds: input.clips.length * 5 - (input.clips.length - 1) * input.crossfadeSeconds };
+    },
+    frameAt: async (videoPath: string, fraction: number, outputPath: string) => {
+      if (!(await core.fs.exists(videoPath))) throw coded('FILM_FRAME', 'The operation could not be completed.');
+      engine.frameReads.push({ videoPath, fraction });
+      core.fs.seedFile(outputPath, 4096);
+      return outputPath;
     },
     lastFrame: async (videoPath: string, outputPath: string) => {
       // AVAssetImageGenerator cannot read a clip that is not there (FilmModule.swift lastFrame).

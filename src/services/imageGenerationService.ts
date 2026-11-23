@@ -6,6 +6,13 @@ import logger from '../utils/logger';
 import { generateId } from '../utils/generateId';
 import { useRemoteServerStore } from '../stores/remoteServerStore';
 import { runRemoteImageGeneration } from './remoteImageGeneration';
+import {
+  BLOCKED_IMAGE_MESSAGE,
+  BLOCKED_PROMPT_MESSAGE,
+  ContentBlockedError,
+  checkImagePrompt,
+  screenGeneratedImage,
+} from './contentSafety';
 import { resolveMobileImageParameters } from './imageParameterPolicy';
 import {
   generationProgressStatus,
@@ -153,7 +160,9 @@ class ImageGenerationService {
     // card's label uses (reasonFromLoadError) so the label and the eject can never
     // disagree — no second regex to drift.
     const memoryPressure = reasonFromLoadError(error) === 'insufficient-memory';
-    const onRetry = this._lastParams
+    // A request the safety check refused would be refused again: no Retry, and the title says so.
+    const blocked = opts?.cause instanceof ContentBlockedError;
+    const onRetry = this._lastParams && !blocked
       ? async () => {
           if (memoryPressure && !opts?.remote)
             await activeModelService.ejectAll().catch(() => {});
@@ -177,7 +186,9 @@ class ImageGenerationService {
     const drawFailed = failedWhileDrawing && !opts?.remote && !memoryPressure;
     reportModelFailure('image', opts?.cause ?? error, {
       message: error,
-      title: opts?.remote ? 'Remote image error' : drawFailed ? "Image model: Couldn't make the image" : undefined,
+      title: blocked
+        ? 'Image not made'
+        : opts?.remote ? 'Remote image error' : drawFailed ? "Image model: Couldn't make the image" : undefined,
       remote: opts?.remote,
       onRetry,
       onLoadAnyway,
@@ -346,17 +357,16 @@ class ImageGenerationService {
         },
       );
       if (!this.isLive(job) || !result?.imagePath) {
-        if (result?.imagePath) {
-          const removed = await onnxImageGeneratorService
-            .deleteGeneratedImage(result.id, result.imagePath)
-            .catch(() => false);
-          if (!removed) {
-            result.modelId = activeImageModel.id;
-            if (params.conversationId) result.conversationId = params.conversationId;
-            useAppStore.getState().addGeneratedImage(result);
-            logger.warn('[ImageGen] could not remove a cancelled image; kept in Gallery');
-          }
-        }
+        if (result?.imagePath) await this.discardStopped(result, activeImageModel.id, params.conversationId);
+        return this.resetFor(job);
+      }
+      // No image reaches the screen, the Gallery or a chat before the on-device safety check.
+      this.updateState({ previewPath: null, status: 'Checking image...' });
+      const removeImage = () => onnxImageGeneratorService.deleteGeneratedImage(result.id, result.imagePath);
+      const safe = await screenGeneratedImage(result.imagePath, removeImage);
+      if (!safe) return this.failFor(job, BLOCKED_IMAGE_MESSAGE, { cause: new ContentBlockedError(BLOCKED_IMAGE_MESSAGE) });
+      if (!this.isLive(job)) {
+        await removeImage().catch(() => false);
         return this.resetFor(job);
       }
       // Publish the result message BEFORE announcing 'done': whoever reacts to 'done' (voice mode
@@ -437,6 +447,13 @@ class ImageGenerationService {
     }
   }
 
+  /** Whether a prompt may go to an image model (contentSafety). */
+  private promptAllowed(prompt: string): boolean {
+    const verdict = checkImagePrompt(prompt);
+    if (!verdict.allowed) logger.warn(`[ContentSafety] prompt blocked (${verdict.match})`);
+    return verdict.allowed;
+  }
+
   /** The image route this request will use, in the spec's terms. */
   private analyticsFacts(): ModelFacts {
     if (useRemoteServerStore.getState().getActiveRemoteMediaServer('image')?.mediaModels?.image) {
@@ -451,12 +468,18 @@ class ImageGenerationService {
     params: GenerateImageParams,
     opts?: { override?: boolean },
   ): Promise<GeneratedImage | null> {
+    if (!this.promptAllowed(params.prompt)) {
+      // The refusal belongs to this request: nothing of the previous image stays in the state.
+      this.updateFor(job, { prompt: params.prompt, conversationId: params.conversationId || null, messageId: null, result: null });
+      return this.failFor(job, BLOCKED_PROMPT_MESSAGE, { cause: new ContentBlockedError(BLOCKED_PROMPT_MESSAGE) });
+    }
     const remoteServer = useRemoteServerStore
       .getState()
       .getActiveRemoteMediaServer('image');
     if (remoteServer?.mediaModels?.image) {
       const enhancedPrompt = await this._enhancePrompt(job, params);
       if (!this.isLive(job)) return this.resetFor(job);
+      if (!this.promptAllowed(enhancedPrompt)) return this.failFor(job, BLOCKED_PROMPT_MESSAGE, { cause: new ContentBlockedError(BLOCKED_PROMPT_MESSAGE) });
       return runRemoteImageGeneration(params, remoteServer, {
         updateState: state => this.updateFor(job, state),
         fail: (message, cause) => this.failFor(job, message, { cause, remote: true }),
@@ -508,6 +531,8 @@ class ImageGenerationService {
     // Stop can arrive while prompt enhancement owns the text engine. Do not clear that request and
     // continue into the image model after the user already pressed X.
     if (!this.isLive(job)) return this.resetFor(job);
+    // The enhancer and the style add words of their own: they pass the same filter.
+    if (!this.promptAllowed(enhancedPrompt)) return this.failFor(job, BLOCKED_PROMPT_MESSAGE, { cause: new ContentBlockedError(BLOCKED_PROMPT_MESSAGE) });
 
     // Establish the generating state unconditionally — not only when enhancement
     // is off. When enhancement is ON but _enhancePrompt bailed early (e.g. no text
@@ -556,6 +581,17 @@ class ImageGenerationService {
     if (job?.conversationId !== conversationId) return;
     await this.cancelGeneration();
     await job.settled;
+  }
+
+  /** A stopped image is removed; one the phone cannot remove is kept only once it passes the check. */
+  private async discardStopped(result: GeneratedImage, modelId: string, conversationId?: string): Promise<void> {
+    const remove = () => onnxImageGeneratorService.deleteGeneratedImage(result.id, result.imagePath);
+    const removed = await remove().catch(() => false);
+    if (removed || !(await screenGeneratedImage(result.imagePath, remove))) return;
+    result.modelId = modelId;
+    if (conversationId) result.conversationId = conversationId;
+    useAppStore.getState().addGeneratedImage(result);
+    logger.warn('[ImageGen] could not remove a cancelled image; kept in Gallery');
   }
 
   async cancelGeneration(): Promise<void> {
