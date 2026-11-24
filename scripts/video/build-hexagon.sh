@@ -50,7 +50,7 @@ docker run --rm --platform linux/amd64 -v "$BUILD:/work" -w /work ubuntu:22.04 b
       -DCMAKE_BUILD_TYPE=Release -DHEXAGON_SDK_ROOT=$HEXAGON_SDK_ROOT \
       -DHEXAGON_TOOLS_ROOT=$HEXAGON_TOOLS_ROOT -DDSP_VERSION=$arch \
       -DPREBUILT_LIB_DIR=toolv19_$arch -DHEXAGON_HTP_DEBUG=OFF
-    cmake --build hexagon-build/$arch --parallel 2
+    cmake --build hexagon-build/$arch --parallel "${VIDEO_BUILD_JOBS:-$(getconf _NPROCESSORS_ONLN)}"
     cp hexagon-build/$arch/libggml-htp-$arch.so hexagon-assets/video-hexagon/liboffgrid-video-htp-$arch.so
   done
   cp hexagon-build/v73/htp_iface_stub.c hexagon-build/v73/htp_iface.h hexagon-runtime/

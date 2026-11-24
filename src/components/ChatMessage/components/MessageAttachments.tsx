@@ -33,13 +33,15 @@ interface FadeInImageProps {
   wrapperTestID?: string;
   onPress?: () => void;
   accessibilityLabel?: string;
+  /** A picture not yet checked by the safety classifier (a live preview) shows blurred. */
+  blurRadius?: number;
 }
 
 function resolveMediaUri(uri: string): string {
   return uri.includes('/Documents/') ? `file://${resolveDocumentPath(uri)}` : uri;
 }
 
-export function FadeInImage({ uri, imageStyle, testID, wrapperTestID, onPress, accessibilityLabel }: FadeInImageProps) {
+export function FadeInImage({ uri, imageStyle, testID, wrapperTestID, onPress, accessibilityLabel, blurRadius }: FadeInImageProps) {
   const displayUri = resolveMediaUri(uri);
   const opacity = useSharedValue(0);
   const [loaded, setLoaded] = React.useState(false);
@@ -63,6 +65,7 @@ export function FadeInImage({ uri, imageStyle, testID, wrapperTestID, onPress, a
           source={{ uri: displayUri }}
           style={imageStyle}
           resizeMode="cover"
+          blurRadius={blurRadius}
           onLoad={() => {
             setLoaded(true);
             opacity.value = withTiming(1, { duration: 300 });

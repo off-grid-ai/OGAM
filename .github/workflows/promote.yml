@@ -1,0 +1,73 @@
+name: Promote to production
+# Ships the EXACT tested beta to the stores, through scripts/promote.sh (the same script as on a
+# developer machine): Play production as a DRAFT (a human confirms the rollout) and a new App
+# Store version with the tested TestFlight build attached (a human presses Submit for Review).
+# Nothing is rebuilt. Release notes come from release-notes/<version>.* on main.
+
+on:
+  workflow_dispatch:
+    inputs:
+      beta_tag:
+        description: The tested beta tag, e.g. v0.0.126-beta.1
+        required: true
+        type: string
+      platform:
+        description: Which store (github cuts the GitHub release from the tested APK)
+        required: true
+        type: choice
+        options: [android, ios, github, all]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: promote
+  cancel-in-progress: false
+
+jobs:
+  promote:
+    # The App Store step runs deliver, which wants macOS; Play and GitHub run on Linux.
+    runs-on: ${{ (inputs.platform == 'ios' || inputs.platform == 'all') && 'macos-latest' || 'ubuntu-latest' }}
+    steps:
+      - uses: actions/checkout@v4
+        with: { ref: main, submodules: false, fetch-depth: 0 }
+      - name: Set up Node
+        uses: ./.github/actions/setup-mobile
+        with:
+          workspace: 'false'
+      - uses: ruby/setup-ruby@v1
+        with: { ruby-version: '3.3', bundler-cache: true }
+      - name: Keep main's release notes across the checkout of the tested commit
+        # promote.sh checks out the tested beta commit, which predates the notes. Kept as
+        # excluded untracked files they survive that checkout and leave the tree clean.
+        run: |
+          git checkout -- .bundle/config Gemfile.lock 2>/dev/null || true
+          mkdir -p "$RUNNER_TEMP/notes" && cp release-notes/* "$RUNNER_TEMP/notes/"
+          git fetch --tags --quiet origin
+          git checkout --quiet "${{ inputs.beta_tag }}"
+          for f in "$RUNNER_TEMP"/notes/*; do
+            n="release-notes/$(basename "$f")"
+            if ! git ls-files --error-unmatch "$n" >/dev/null 2>&1; then
+              cp "$f" "$n" && echo "$n" >> .git/info/exclude
+            fi
+          done
+          git status --porcelain
+      - name: Decode the Play key
+        if: ${{ inputs.platform == 'android' || inputs.platform == 'all' }}
+        run: |
+          # PLAY_STORE_JSON_KEY may be stored raw-JSON or base64 — handle both.
+          echo "${{ secrets.PLAY_STORE_JSON_KEY }}" | base64 --decode > "$RUNNER_TEMP/play-key.json" \
+            || printf '%s' '${{ secrets.PLAY_STORE_JSON_KEY }}' > "$RUNNER_TEMP/play-key.json"
+      - name: Promote (scripts/promote.sh)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PLAY_STORE_JSON_KEY_PATH: ${{ runner.temp }}/play-key.json
+          ASC_API_KEY_P8: ${{ secrets.ASC_API_KEY_P8 }}
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: |
+          git config user.name  "offgrid-ci"
+          git config user.email "ci@offgridmobile.ai"
+          ARG=""; [ "${{ inputs.platform }}" != "all" ] && ARG="--${{ inputs.platform }}"
+          bash scripts/promote.sh "${{ inputs.beta_tag }}" $ARG

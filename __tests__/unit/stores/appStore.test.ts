@@ -603,6 +603,16 @@ describe('appStore', () => {
       expect(images[1].prompt).toBe('First');
     });
 
+    it('addGeneratedImage keeps one entry per image id', () => {
+      const { addGeneratedImage } = useAppStore.getState();
+      const image = createGeneratedImage({ prompt: 'Once' });
+
+      addGeneratedImage(image);
+      addGeneratedImage({ ...image });
+
+      expect(getAppState().generatedImages.map(item => item.id)).toEqual([image.id]);
+    });
+
     it('removeGeneratedImage removes by ID', () => {
       const { addGeneratedImage, removeGeneratedImage } =
         useAppStore.getState();

@@ -22,6 +22,7 @@ import { useTheme } from '../../theme';
 import { getSlot, SLOTS } from '../../bootstrap/slotRegistry';
 import type { ArrivingChatModel } from '../../services/arrivingChatModel';
 import { chatTitle, NEW_CHAT_TITLE } from '../../utils/chatTitle';
+import { UNCHECKED_PREVIEW_BLUR_RADIUS } from '../../services/contentSafety';
 
 type StylesType = ReturnType<typeof createStyles>;
 type ColorsType = ReturnType<typeof useTheme>['colors'];
@@ -303,7 +304,7 @@ export const ImageProgressIndicator: React.FC<{
     <View style={styles.imageProgressCard}>
       <View style={styles.imageProgressRow}>
         {imagePreviewPath && (
-          <Image source={{ uri: imagePreviewPath }} style={styles.imagePreview} resizeMode="cover" />
+          <Image source={{ uri: imagePreviewPath }} style={styles.imagePreview} resizeMode="cover" blurRadius={UNCHECKED_PREVIEW_BLUR_RADIUS} />
         )}
         <View style={styles.imageProgressContent}>
           <View style={styles.imageProgressHeader}>

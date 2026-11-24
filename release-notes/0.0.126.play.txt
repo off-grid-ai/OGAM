@@ -1,0 +1,3 @@
+Safer image and video making. Off Grid AI now turns down requests for sexual or nude images and videos, and checks every picture and clip made on your phone before you see it.
+
+Faster, steadier chat engines under the hood.

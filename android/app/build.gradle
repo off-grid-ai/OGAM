@@ -160,8 +160,8 @@ android {
         }
     }
     aaptOptions {
-        // Prevent AAPT from compressing .gguf model files — they must be copied byte-for-byte
-        noCompress 'gguf'
+        // Prevent AAPT from compressing .gguf and .pte model files — they must be copied byte-for-byte
+        noCompress 'gguf', 'pte'
     }
 }
 
