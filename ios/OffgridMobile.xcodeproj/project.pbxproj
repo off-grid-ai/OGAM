@@ -57,9 +57,9 @@
 		A084C602C3B4A415DC74D43F /* libPods-OffgridMobile.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 3A3BA1A946E10FA48AA4C0EB /* libPods-OffgridMobile.a */; };
 		AA6B365ADC22F0E7D36EB07F /* DownloaderExtension.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4D221056AEEA5E7A74ED105A /* DownloaderExtension.swift */; };
 		AABB000100000000000001AA /* OffgridMobileTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABB000200000000000002AA /* OffgridMobileTests.swift */; };
+		E29F58BAB90929BB7573C306 /* nsfw_384_xnnpack_fp32.pte in Resources */ = {isa = PBXBuildFile; fileRef = 68FDA03D378DB8834FB8D787 /* nsfw_384_xnnpack_fp32.pte */; };
 		EAF6032D64B6BBFCAFA9BEF7 /* BundledModelDownloader.appex in Embed ExtensionKit Extensions */ = {isa = PBXBuildFile; fileRef = 75433DF1CD3412551868F40C /* BundledModelDownloader.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		EB41087B1C40046EAC95BB6F /* BundledModelModule.m in Sources */ = {isa = PBXBuildFile; fileRef = B8E8AC374FAA1BD8E46EE112 /* BundledModelModule.m */; };
-		E29F58BAB90929BB7573C306 /* nsfw_384_xnnpack_fp32.pte in Resources */ = {isa = PBXBuildFile; fileRef = 68FDA03D378DB8834FB8D787 /* nsfw_384_xnnpack_fp32.pte */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -158,9 +158,9 @@
 		4D221056AEEA5E7A74ED105A /* DownloaderExtension.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = DownloaderExtension.swift; sourceTree = "<group>"; };
 		5C1B00032F44000100C11A00 /* ScribeEntryModule.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = ScribeEntryModule.m; sourceTree = "<group>"; };
 		5C1B00042F44000100C11A00 /* ScribeEntryModule.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScribeEntryModule.swift; sourceTree = "<group>"; };
+		68FDA03D378DB8834FB8D787 /* nsfw_384_xnnpack_fp32.pte */ = {isa = PBXFileReference; lastKnownFileType = file; path = nsfw_384_xnnpack_fp32.pte; sourceTree = "<group>"; };
 		6D173888147964608FDC773C /* BundledModelDownloader.entitlements */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.entitlements; path = BundledModelDownloader.entitlements; sourceTree = "<group>"; };
 		75433DF1CD3412551868F40C /* BundledModelDownloader.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = BundledModelDownloader.appex; sourceTree = BUILT_PRODUCTS_DIR; };
-		68FDA03D378DB8834FB8D787 /* nsfw_384_xnnpack_fp32.pte */ = {isa = PBXFileReference; lastKnownFileType = file; path = nsfw_384_xnnpack_fp32.pte; sourceTree = "<group>"; };
 		761780EC2CA45674006654EE /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppDelegate.swift; path = OffgridMobile/AppDelegate.swift; sourceTree = "<group>"; };
 		78339A91E64FCE129352B94F /* BackgroundAssets.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = BackgroundAssets.framework; path = Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS18.0.sdk/System/Library/Frameworks/BackgroundAssets.framework; sourceTree = DEVELOPER_DIR; };
 		81AB9BB72411601600AC10FF /* LaunchScreen.storyboard */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.storyboard; name = LaunchScreen.storyboard; path = OffgridMobile/LaunchScreen.storyboard; sourceTree = "<group>"; };
