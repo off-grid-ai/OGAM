@@ -298,7 +298,17 @@ if stage upload; then
   [ "$DO_IOS" = 0 ] || [ -f build/OffgridMobile.ipa ] || error "IPA not found: run --build-only first"
 fi
 if stage all upload; then
-if [ "$DO_ANDROID" = 1 ] && [ "$RESUME_IOS" = 0 ]; then info "Android → Play open testing (AAB)…"; bundle exec fastlane android upload_beta; fi
+if [ "$DO_ANDROID" = 1 ] && [ "$RESUME_IOS" = 0 ]; then
+  info "Android → Play open testing (AAB)…"
+  # Play refuses every upload while the app is suspended there. The beta still ships: TestFlight, the
+  # tag and the GitHub prerelease (APK + AAB) go ahead and the Play step only warns. Set
+  # PLAY_UPLOAD_REQUIRED=1 once the Play listing is back, so a Play failure stops the beta again.
+  if ! bundle exec fastlane android upload_beta; then
+    [ "${PLAY_UPLOAD_REQUIRED:-0}" = 1 ] && error "Play upload failed."
+    warn "Play upload failed (the app is suspended on Play). The APK and AAB still go on the GitHub prerelease."
+    [ -n "${GITHUB_ACTIONS:-}" ] && echo "::warning title=Play upload skipped::Play refused the upload (app suspended). The APK and AAB are on the GitHub prerelease."
+  fi
+fi
 if [ "$DO_IOS" = 1 ];     then info "iOS → TestFlight external…";     bundle exec fastlane ios upload_beta;     fi
 fi
 if stage upload; then info "Uploaded; the tag and the GitHub prerelease wait for every platform (--finalize)."; exit 0; fi
@@ -357,6 +367,6 @@ rm -f "$NOTES_FILE" "${ANDROID_CHANGELOG:-}" "$APK_DST" "$AAB_DST" "$IPA_DST"
 echo ""
 info "${BOLD}Beta ${BETA_VERSION} shipped.${NC}"
 [ "$DO_IOS" = 1 ]     && info "  iOS:     TestFlight external groups (after Beta App Review)"
-[ "$DO_ANDROID" = 1 ] && info "  Android: Play Console → Open testing (after Play review)"
+[ "$DO_ANDROID" = 1 ] && info "  Android: the APK on the GitHub prerelease (and Play open testing once Play accepts uploads again)"
 info "  GitHub:  $(gh release view "$TAG" --json url -q .url 2>/dev/null)"
 info "Approve the beta, then run scripts/release.sh to cut the real version to production."
