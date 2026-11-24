@@ -8,7 +8,7 @@
  * starts no second copy. When the packs arrive, their files come into the models folder (a rename on
  * Android; a copy out of the system's storage on iOS) and the model registers and is chosen exactly as a finished download is
  * (startModelDownload). If the packs stop, Retry runs the regular download: that path stays the fallback
- * everywhere.
+ * everywhere. With no packs at all, a fresh install runs that regular download of the same model at once.
  */
 import RNFS from 'react-native-fs';
 import { useAppStore } from '../../stores';
@@ -87,6 +87,7 @@ async function follow(port: BundledModelPort): Promise<void> {
 async function settle(port: BundledModelPort, state: BundledModelState): Promise<boolean> {
   switch (state.kind) {
     case 'absent':
+      startWithoutPacks();
       return true;
     case 'arrived':
       await adopt(port, state.paths);
@@ -98,6 +99,20 @@ async function settle(port: BundledModelPort, state: BundledModelState): Promise
       showRow('failed', state.bytes, state.total);
       return true;
   }
+}
+
+/**
+ * No packs come with this install (an APK from GitHub, F-Droid, iOS before 26): a fresh install fetches
+ * the same model itself at first open, so the first chat is the one a store install gets. Not for a phone
+ * that already finished onboarding or holds a model: an update never starts a download on its own.
+ */
+function startWithoutPacks(): void {
+  const app = useAppStore.getState();
+  if (app.hasCompletedOnboarding || app.downloadedModels.length > 0) return;
+  if (useDownloadStore.getState().downloads[MODEL_KEY]) return;
+  startModelDownload(BUNDLED_MODEL.modelId, bundledModelFile(), { autoSelectIfEmpty: true }).catch(err => {
+    logger.error('[BundledModel] download without packs failed to start', err);
+  });
 }
 
 function showRow(status: 'running' | 'waiting_for_network' | 'failed', bytes: number, total: number): void {
