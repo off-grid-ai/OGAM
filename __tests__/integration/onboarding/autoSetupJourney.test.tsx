@@ -211,7 +211,7 @@ describe('Auto Setup release journey', () => {
     unregister.forEach(dispose => dispose());
     // A chat model left on the phone or on its way would make the next Start chatting skip its download.
     useDownloadStore.setState({ downloads: {} });
-    useAppStore.setState({ downloadedModels: [] });
+    useAppStore.setState({ downloadedModels: [], onboardingPicks: null });
   });
 
   it('selects a device-fit plan, starts all model downloads, and activates it', async () => {
@@ -376,6 +376,26 @@ describe('Auto Setup release journey', () => {
     await waitFor(() => expect(navigation.reset).toHaveBeenCalled());
     expect(useAppStore.getState().activeModelId).toBe('on-phone');
     expect(await modelDownloadService.list()).toEqual([]);
+  });
+
+  it('with a chat model on the phone, shows the picks and Start chatting still downloads the other ones', async () => {
+    useAppStore.setState({
+      downloadedModels: [createDownloadedModel({ id: 'on-phone', name: 'On Phone' })],
+      activeModelId: null,
+      onboardingPicks: { groups: ['chat', 'create'], parts: ['chat', 'images'] },
+    });
+    const ui = render(<AutoSetupScreen navigation={navigation} sessionFactory={sessionFactory} />);
+    await waitFor(() => expect(ui.getByText('On Phone is ready on this phone. Ask now.')).toBeTruthy());
+    // Start chatting reads as the end of the person's setup: their picks sit right above it.
+    expect(ui.getByTestId('setup-picks')).toBeTruthy();
+    fireEvent.press(ui.getByTestId('auto-setup-start-chatting'));
+
+    await waitFor(() => expect(navigation.reset).toHaveBeenCalled());
+    expect(useAppStore.getState().activeModelId).toBe('on-phone');
+    // The picture model comes beside the chat model on the phone; no second chat model downloads.
+    await waitFor(async () =>
+      expect((await modelDownloadService.list()).map(d => d.modelType)).toEqual(['image']),
+    );
   });
 
   it('stays on setup with Try Again when Start chatting cannot start the download', async () => {
