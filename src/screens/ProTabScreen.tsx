@@ -93,24 +93,26 @@ export const ProTabScreen: React.FC = () => {
             );
           })}
         </View>
-        {hasPro ? (
-          <TouchableOpacity
-            style={[styles.navSection, styles.navItem, styles.navItemLast]}
-            onPress={() => navigation.navigate('ProDetail')}
-            accessibilityRole="button"
-            accessibilityLabel="Your licence"
-            testID="pro-tab-licence"
-          >
-            <View style={styles.navItemIcon}>
-              <Icon name="award" size={16} color={colors.textSecondary} />
-            </View>
-            <View style={styles.navItemContent}>
-              <Text style={styles.navItemTitle}>Your licence</Text>
-              <Text style={styles.navItemDesc}>Devices, renewal and restore</Text>
-            </View>
-            <Icon name="chevron-right" size={16} color={colors.textMuted} />
-          </TouchableOpacity>
-        ) : null}
+        {/* With Pro: the licence. Without it: the key field, so a key bought on the web is one tap
+            away and never behind the checkout page. */}
+        <TouchableOpacity
+          style={[styles.navSection, styles.navItem, styles.navItemLast]}
+          onPress={() => navigation.navigate('ProDetail', hasPro ? undefined : { unlock: true })}
+          accessibilityRole="button"
+          accessibilityLabel={hasPro ? 'Your licence' : 'I have a license key'}
+          testID="pro-tab-licence"
+        >
+          <View style={styles.navItemIcon}>
+            <Icon name={hasPro ? 'award' : 'key'} size={16} color={colors.textSecondary} />
+          </View>
+          <View style={styles.navItemContent}>
+            <Text style={styles.navItemTitle}>{hasPro ? 'Your licence' : 'I have a license key'}</Text>
+            <Text style={styles.navItemDesc}>
+              {hasPro ? 'Devices, renewal and restore' : 'Paste the key from your email'}
+            </Text>
+          </View>
+          <Icon name="chevron-right" size={16} color={colors.textMuted} />
+        </TouchableOpacity>
         <View style={styles.navSection}>
           {elsewhere.map((card, index) => (
             <TouchableOpacity

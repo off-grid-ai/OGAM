@@ -1,5 +1,7 @@
 import React from 'react';
 import { View, Text, Image } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { TouchableOpacity } from '../Touchable';
 import Icon from 'react-native-vector-icons/Feather';
 import { AnimatedEntry } from '../AnimatedEntry';
@@ -15,6 +17,7 @@ import {
 } from '../../constants';
 import { useOtherProduct } from '../../hooks/useOtherProduct';
 import { getPricingCopy } from '../../utils/proPricing';
+import type { RootStackParamList } from '../../navigation/types';
 
 interface Props {
   /** Re-trigger the entrance animation when the screen regains focus. */
@@ -41,6 +44,9 @@ export const ProUpsellBanner: React.FC<Props> = ({ trigger, onGetPro }) => {
   const pricing = getPricingCopy();
   // Get the desktop app, or Open it when one is already paired (the shared rule).
   const desktop = useOtherProduct('pro-upsell')('desktop');
+  // Bought already: the key field opens here, without going through the checkout page.
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const enterKey = () => navigation.navigate('ProDetail', { unlock: true });
 
   if (!show) return null;
 
@@ -73,6 +79,17 @@ export const ProUpsellBanner: React.FC<Props> = ({ trigger, onGetPro }) => {
         </View>
 
         <Button title={pricing.cta} variant="hero" size="small" onPress={onGetPro} style={styles.cta} />
+
+        <AnimatedPressable
+          style={[styles.linkRow, styles.desktopLink]}
+          onPress={enterKey}
+          accessibilityRole="button"
+          accessibilityLabel="I have a license key"
+          testID="pro-upsell-enter-key"
+        >
+          <Text style={styles.linkText}>I have a license key</Text>
+          <Icon name="key" size={16} color={colors.primary} />
+        </AnimatedPressable>
 
         <AnimatedPressable
           style={[styles.linkRow, styles.desktopLink]}
