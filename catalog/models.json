@@ -38,7 +38,7 @@
         "params": 1.92,
         "minRamGb": 4,
         "quant": "Q4_K_M",
-        "minLlamaBuild": 11938,
+        "minLlamaBuild": 11960,
         "isNew": true,
         "releaseDate": "2026-10-19",
         "files": [

@@ -299,6 +299,9 @@ it('a left-over session that is unreadable, empty, or from before opting out is 
   const AsyncStorage = require('@react-native-async-storage/async-storage');
   const first = await launch({ usage: true });
   await first.background();
+  // The first session is sent before the relaunch, as on a phone: a queued summary still in flight
+  // would otherwise arrive at the next launch and be counted as its own.
+  await waitFor(() => expect(first.endpoint.named('session_summary')).toHaveLength(1));
   for (const raw of ['{not json', '{}']) {
     await AsyncStorage.setItem('offgrid.analytics.pendingSession', raw);
     const next = await launch(null, true);

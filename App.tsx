@@ -10,7 +10,8 @@ import { Pressable } from './src/components/Touchable';
 import { SystemBars } from 'react-native-edge-to-edge';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { NavigationContainer } from '@react-navigation/native';
+import { NavigationContainer, type NavigationState } from '@react-navigation/native';
+import { useAppLanguage } from './src/i18n/appLanguage';
 import { openPendingImprove, startScribeEntry } from './src/services/scribeEntry';
 import { startProCheckoutReturn } from './src/services/proCheckout';
 import { AliveProvider } from './src/components/AliveProvider';
@@ -32,6 +33,8 @@ import { hydrateDownloadStore } from './src/services/downloadHydration';
 import { initModelCatalog } from './src/stores/modelCatalogStore';
 import { initActiveDownloadPersistence } from './src/services/activeDownloadPersistence';
 import { restoreQueuedDownloads } from './src/services/restoreQueuedDownloads';
+import { startBundledModel } from './src/services/bundledModel';
+import { ShareCardHost } from './src/components/ShareCard/ShareCardHost';
 import { startLoadPolicySync } from './src/services/loadPolicySync';
 import { startNetworkReconnectWatcher, stopNetworkReconnectWatcher } from './src/services/networkReconnect';
 import { registerCoreDownloadProviders } from './src/services/modelDownloadService/registerProviders';
@@ -145,6 +148,10 @@ function saveChatStateOnBackground(): void {
 }
 
 function App() {
+  // The app language, set before any screen renders. A change remounts the screens under its key (the
+  // React Compiler memoizes JSX, so a redraw alone would keep the old text) and reopens the same route.
+  const language = useAppLanguage();
+  const navigationState = useRef<NavigationState | undefined>(undefined);
   useEffect(() => () => {
     stopStartupProbe?.();
     stopStartupProbe = null;
@@ -288,6 +295,11 @@ function App() {
       await restoreQueuedDownloads().catch((error) => {
         logger.error('[App] Failed to restore queued downloads during startup:', error);
       });
+
+      // The chat model that ships with the app (Play AI packs): adopt it if it has arrived, or show it
+      // on its way as a download row. After hydrate, so it dedupes against a regular download of it.
+      // Not awaited: it follows the packs until they land.
+      startBundledModel();
 
       // Reconcile image model directories that finished extracting on disk but whose AsyncStorage
       // registration was lost to an app kill. Reads the (just-hydrated) download store, so it lives
@@ -489,15 +501,18 @@ function App() {
         {/* The alive layer hears every touch and scroll on the UI thread so the living field answers. */}
         <AliveProvider>
         <SystemBars style={isDark ? 'light' : 'dark'} />
+        <React.Fragment key={language.code}>
         {AppRoot ? <AppRoot /> : null}
         <NavigationContainer
           ref={appNavigationRef}
+          initialState={navigationState.current}
           onReady={() => {
             applyPendingProRedirect();
             openPendingImprove().catch(() => undefined);
             trackScreen(appNavigationRef.getCurrentRoute()?.name);
           }}
-          onStateChange={() => {
+          onStateChange={state => {
+            navigationState.current = state;
             applyPendingProRedirect();
             trackScreen(appNavigationRef.getCurrentRoute()?.name);
           }}
@@ -534,6 +549,8 @@ function App() {
           <AppNavigator />
         </NavigationContainer>
         <AnalyticsConsentPrompt />
+        <ShareCardHost />
+        </React.Fragment>
         {__DEV__ && showSyncStatusBar ? <DevSyncStrip /> : null}
         </AliveProvider>
       </SafeAreaProvider>

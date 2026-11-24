@@ -64,6 +64,9 @@ describe('Desktop task card Stop', () => {
       startedAt: 10,
       updatedAt: 20,
     };
+    // The Mac is on Sync: controls are live only while the computer running the task is there.
+    const { useSyncStore } = require('../../../pro/sync/syncStore');
+    useSyncStore.getState().setConnectedDeviceIds([run.executionDevice.id]);
     const materializer = new MobileStateMaterializer();
     materializer.put(
       TASK_RUN_ENTITY,

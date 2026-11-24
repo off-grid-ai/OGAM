@@ -1,3 +1,5 @@
+import { permissionReadiness, type Readiness } from '@offgrid/features';
+import { askPermission, readPermission } from '../../services/osPermissions';
 import React, { useState, useRef } from 'react';
 
 import {
@@ -33,7 +35,8 @@ import { generateId } from '../../utils/generateId';
 
 // ─── useAttachments hook ──────────────────────────────────────────────────────
 
-export function useAttachments(setAlertState: (state: AlertState) => void) {
+/** `onBlocked`: a permission is off, with the line and step to show above the composer. */
+export function useAttachments(setAlertState: (state: AlertState) => void, onBlocked?: (readiness: Readiness) => void) {
   const [attachments, setAttachments] = useState<MediaAttachment[]>([]);
   const isPickingRef = useRef(false);
 
@@ -80,6 +83,12 @@ export function useAttachments(setAlertState: (state: AlertState) => void) {
   };
 
   const pickFromCamera = async () => {
+    // The camera opens only with its permission; without it the picker failed with no word.
+    const camera = await readPermission('camera');
+    if (camera !== 'granted' && !(camera === 'ask' && (await askPermission('camera')))) {
+      onBlocked?.(permissionReadiness('camera', 'blocked'));
+      return;
+    }
     try {
       // Release the iOS audio session first (see pickFromLibrary): the camera grabs audio
       // hardware and collides with an active voice-mode session. No-op on Android.

@@ -39,6 +39,7 @@ import {
 } from './imageGenerationTypes';
 import { featureUsed, generationStarted, type ModelFacts } from './analytics/analytics';
 import { imageModelFacts, REMOTE_MODEL_FACTS } from './analytics/modelFacts';
+import { noteTurnNotGood } from '../utils/sharePrompt';
 
 export { isInFlight } from './imageGenerationTypes';
 export type {
@@ -437,7 +438,11 @@ class ImageGenerationService {
     try {
       const result = await run;
       if (result) endAnalytics('done');
-      else endAnalytics(job.cancelled ? 'stopped' : 'failed', { error: this.state.error ?? undefined });
+      else {
+        endAnalytics(job.cancelled ? 'stopped' : 'failed', { error: this.state.error ?? undefined });
+        // A picture that failed or was stopped: the rating ask waits for a new run of good ones.
+        noteTurnNotGood();
+      }
       return result;
     } catch (error) {
       endAnalytics(job.cancelled ? 'stopped' : 'failed', { error });

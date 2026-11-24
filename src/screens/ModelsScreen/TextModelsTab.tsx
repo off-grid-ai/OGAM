@@ -4,7 +4,7 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../../navigation/types';
 import { View, Text, FlatList, RefreshControl, Platform, type StyleProp, type ViewStyle } from 'react-native';
 import { GROUPED_CARD_ROW, ListGroupSeparator, listGroupRowEnds } from '../../components/ListGroup';
-import { SearchField } from '../../components/SearchField';
+import { ListSearchBar } from '../../components/ListSearchBar';
 import { TouchableOpacity } from '../../components/Touchable';
 import { LIST_CLIPPING_PROPS } from '../../constants/listClipping';
 import { LoadingDots } from '../../components/LoadingDots';
@@ -173,7 +173,7 @@ const ModelDetailView: React.FC<DetailProps> = ({
   // Every file this phone can run, best first for this phone (the recommended quant leads). A vision
   // file's projector downloads and loads with it, so the fit counts both, as the picks and load check do.
   const runnableFiles = modelFiles
-    .filter(f => f.size > 0 && !fileExceedsBudget(downloadBytes(f), ramGB, textModelBudget()) && (filterState.quant === 'all' || f.name.includes(filterState.quant)))
+    .filter(f => f.size > 0 && !fileExceedsBudget(downloadBytes(f), ramGB, textModelBudget(ramGB)) && (filterState.quant === 'all' || f.name.includes(filterState.quant)))
     .sort((a, b) => {
       if (selectedModel.id === LITERT_PARENT_ID) return a.size - b.size; // curated: small-first
       // Tier: the preferred download quant (Q4_0 on Android CPU/NPU, else Q4_K_M) → GPU/NPU
@@ -234,10 +234,10 @@ const ModelDetailView: React.FC<DetailProps> = ({
           bytesPerSecond: s.progress.bytesPerSecond,
         } : undefined}
         isRepairingVision={s.repairingVision}
-        isCompatible={!fileExceedsBudget(downloadBytes(item), ramGB, textModelBudget())} testID={`file-card-${index}`}
+        isCompatible={!fileExceedsBudget(downloadBytes(item), ramGB, textModelBudget(ramGB))} testID={`file-card-${index}`}
         // "Runs well" is the default and goes unsaid; only a tight fit is worth a word on the card.
         sizeLabel={sizeLabelOf(item)}
-        facts={modelFitTier(downloadBytes(item), ramGB, textModelBudget()) === 'tight' ? [fitLabel('tight')] : undefined}
+        facts={modelFitTier(downloadBytes(item), ramGB, textModelBudget(ramGB)) === 'tight' ? [fitLabel('tight')] : undefined}
         onDownload={onDownload}
         onDelete={s.downloaded ? () => handleDeleteModel(`${selectedModel.id}/${item.name}`) : undefined}
         onRepairVision={s.needsVisionRepair && !s.progress && !s.repairingVision ? () => handleRepairMmProj(selectedModel, item) : undefined}
@@ -502,15 +502,15 @@ export const TextModelsTab: React.FC<Props> = (props) => {
 
   return (
     <>
-      <View style={[styles.searchContainer, styles.searchContainerRaised]} testID="text-model-search-row">
-        <SearchField
-          style={styles.searchField}
-          placeholder="Search models"
-          value={searchQuery}
-          onChangeText={setSearchQuery}
-          onSubmitEditing={handleSearch}
-          testID="search-input"
-        />
+      <ListSearchBar
+        placeholder="Search models"
+        clearLabel="Clear model search"
+        value={searchQuery}
+        onChangeText={setSearchQuery}
+        onSubmitEditing={handleSearch}
+        testID="search-input"
+        barTestID="text-model-search-row"
+      >
         <TouchableOpacity
           style={[styles.filterToggle, sortToggleActive && styles.filterToggleActive]}
           onPress={() => toggleFilterDimension('sort')}
@@ -547,7 +547,7 @@ export const TextModelsTab: React.FC<Props> = (props) => {
             <Icon name="upload" size={14} color={colors.textMuted} />
           </TouchableOpacity>
         )}
-      </View>
+      </ListSearchBar>
 
       {filterState.expandedDimension === 'sort' && <SortPanel filterState={filterState} setSortOption={setSortOption} styles={styles} colors={colors} />}
 

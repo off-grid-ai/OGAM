@@ -1,4 +1,5 @@
 import { useAppStore, useRemoteServerStore } from '../stores';
+import { configuredContextTokens } from './contextWindow';
 import { llmService } from './llm';
 import { liteRTService } from './litert';
 import { providerRegistry } from './providers';
@@ -276,6 +277,16 @@ export function activeLiteRTContextTokens(): number | undefined {
   if (isRemoteTextModelActive()) return undefined;
   if (getActiveEngineService() !== liteRTService || !liteRTService.isModelLoaded()) return undefined;
   return liteRTService.getContextUsage().max;
+}
+
+/**
+ * The context window the active text model really has, in tokens: what LiteRT loaded; for a remote
+ * server, what that server reports for the model (LM Studio, Ollama, llama-server); otherwise llama.cpp's
+ * setting. Compaction, history, documents and tool results all budget against this one number, so a
+ * 32K model on a computer is not compacted as if it were a 4K model on the phone.
+ */
+export function activeContextTokens(): number {
+  return activeLiteRTContextTokens() ?? configuredContextTokens();
 }
 
 /**

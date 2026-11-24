@@ -1,0 +1,25 @@
+Use case: ui-mockup.
+Create one finished, flat screenshot of the Off Grid AI browser extension welcome page, step 3 of 5, when Off Grid AI is not found on this computer.
+OUTPUT: landscape PNG, exactly 1536 x 1024 pixels. The interface fills the entire canvas edge to edge.
+
+REFERENCE INPUTS: Image 1, refs/desktop-setup.jpg, and Image 2, refs/desktop-groups.jpg, are style references only. Match the real Off Grid AI onboarding design in these references exactly: same restrained dark glass, faint dot lattice, fine borders, typography, small icons and footer treatment. Replace the reference page contents with only the text specified below. Do not copy any other reference text.
+
+STYLE: near-black #0A0A0A background, faint fine evenly spaced dot lattice, one soft diffuse emerald glow near the top. Geist sans for all titles, text and buttons; title large and light, body regular. Geist Mono for small uppercase muted labels. Translucent dark glass card, delicate neutral hairline border, rounded corners, very faint top highlight. One accent only: emerald #34D399 on the single primary button and the active third progress segment. All other elements neutral greys. Thin Phosphor-style computer line icon. Quiet, precise, spacious and faithful to the references, without decorative artwork.
+
+LAYOUT: A centred content column about 900 px wide, with generous outer space. Centre-align the heading area. Place the small muted mono label near y=240, the large light title below it, then the muted supporting sentence with comfortable line height. Put the glass card below around y=435, width about 800 px and height about 220 px. In the card, centre the thin computer icon above the card title; below it, arrange two buttons side by side, emerald primary on the left and quiet neutral outline on the right. Below the card, centre the small muted network sentence with its final phrase styled as a quiet neutral link. Keep all text fully visible with generous padding. No selected tiles are needed for this state.
+
+EXACT TEXT, each appearing once, with precise spelling, punctuation, case and spacing:
+Top muted mono label: "OFF GRID AI · IN YOUR BROWSER"
+Large title: "Get Off Grid AI for your computer"
+Muted supporting sentence: "Your picks run on your computer, so chats and pages never leave it. It takes about two minutes."
+Glass card title: "Off Grid AI for Mac, Windows and Linux"
+Emerald primary button: "Get Off Grid AI"
+Quiet outline button beside it: "I have it, look again"
+Small muted sentence below card: "Using another computer on your network? Set its address"
+Within that sentence only, "Set its address" is a quiet link, without repeating the phrase elsewhere.
+Footer centre mono step label: "CONNECT"
+Footer right quiet text button: "Back"
+
+FOOTER: a thin full-width bottom bar about 76 px high, separated by a fine top border, as in desktop-groups.jpg. At left use only a short muted neutral line with no text, because no left-footer copy is supplied. At the exact horizontal centre, show a short progress line of exactly five small separated horizontal segments; the third segment alone is active emerald, the other four are muted neutral grey. Below those segments place the tiny mono label CONNECT. Put the quiet Back text button on the right with comfortable edge padding. The only emerald primary button on the entire page is Get Off Grid AI inside the card.
+
+CONSTRAINTS: Every quoted string must be exact, legible and unclipped. Add no other copy, no watermark, no browser chrome, no device frame, no emojis, no coloured badges, no traffic lights, no 3D, no illustrations, no extra icons or controls. Do not render prompt labels or quotation marks. Preserve the supplied copy exactly.

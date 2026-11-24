@@ -21,12 +21,15 @@ describe.each(['ios', 'android'] as const)('chat mic with the microphone denied 
       view.getByTestId('voice-record-button-mic-denied'),
     );
     expect(view.queryByTestId('voice-record-button')).toBeNull();
+    // The crossed-out mic is not left wordless: the composer names it, with the way to undo it.
+    expect(view.getByText('Microphone access is off.')).toBeTruthy();
+    expect(view.getByTestId('composer-readiness-open-settings')).toBeTruthy();
 
     h.rtl.fireEvent.press(deniedMic);
     await h.rtl.waitFor(() => {
       expect(view.getByText('Microphone Access Is Off')).toBeTruthy();
     });
-    h.rtl.fireEvent.press(view.getByText('Open Settings'));
+    h.rtl.fireEvent.press(h.rtl.within(view.getByTestId('app-alert')).getByText('Open Settings'));
     expect(h.boundary.settingsOpenedCount()).toBe(1);
 
     // The person allows the mic in Settings. Nothing changes until they come back to the app.

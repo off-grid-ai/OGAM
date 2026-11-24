@@ -43,10 +43,10 @@ describe('T058/B20 — LiteRT vision-capable model exposes the same attach-photo
     // The vision affordance produced a real, rendered attachment (the terminal artifact the user perceives).
     expect(h.view!.queryByTestId('attachments-container')).not.toBeNull();
     // And the app did NOT wall the LiteRT vision model with the no-vision alert.
-    expect(h.view!.queryByText('Vision Not Supported')).toBeNull();
+    expect(h.view!.queryByText('Needs a model that can see pictures.')).toBeNull();
   });
 
-  it('a LiteRT model WITHOUT vision walls the identical gesture with "Vision Not Supported" — proving the affordance is gated, not always-on', async () => {
+  it('a LiteRT model WITHOUT vision walls the identical gesture with "Needs a model that can see pictures." — proving the affordance is gated, not always-on', async () => {
     const h = await setupChatScreen({ navigation: 'real', engine: 'litert', vision: false });
     h.render();
 
@@ -58,7 +58,7 @@ describe('T058/B20 — LiteRT vision-capable model exposes the same attach-photo
     expect(view.queryByTestId('attach-camera')).toBeNull();
 
     // The rendered UI artifact for "vision not exposed": the alert wall, and NO attachment chip.
-    await h.rtl.waitFor(() => { expect(view.queryByText('Vision Not Supported')).not.toBeNull(); });
+    await h.rtl.waitFor(() => { expect(view.queryByText('Needs a model that can see pictures.')).not.toBeNull(); });
     expect(view.queryByTestId('attachments-container')).toBeNull();
   });
 });

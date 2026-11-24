@@ -76,6 +76,8 @@ test('Auto Setup shows Absolute Reality when the device catalog would choose NAI
     />,
   );
 
+  // First launch leads with Start chatting; the plans are behind Choose another.
+  fireEvent.press(await waitFor(() => ui.getByTestId('auto-setup-choose-another')));
   await waitFor(() =>
     expect(ui.getByTestId('auto-setup-plan-lean')).toBeTruthy(),
   );
@@ -107,6 +109,8 @@ test('Auto Setup offers the GPU model when the device recommends GPU', async () 
     />,
   );
 
+  // First launch leads with Start chatting; the plans are behind Choose another.
+  fireEvent.press(await waitFor(() => ui.getByTestId('auto-setup-choose-another')));
   await waitFor(() =>
     expect(ui.getByTestId('auto-setup-plan-balanced')).toBeTruthy(),
   );
@@ -143,6 +147,8 @@ test('Android Auto Setup presents complementary image models across its three pl
     />,
   );
 
+  // First launch leads with Start chatting; the plans are behind Choose another.
+  fireEvent.press(await waitFor(() => ui.getByTestId('auto-setup-choose-another')));
   await waitFor(() => expect(ui.getByTestId('auto-setup-plan-lean')).toBeTruthy());
   for (const [tier, name] of [
     ['lean', 'Anything V5 (NPU 8gen2)'],
@@ -173,7 +179,7 @@ describe('Choose models opened from Storage (hand test 13)', () => {
     const ui = render(
       <AutoSetupScreen navigation={navigation as never} sessionFactory={() => createAutoSetupSession({ catalog })} />,
     );
-    await waitFor(() => expect(ui.getByTestId('auto-setup-plan-lean')).toBeTruthy());
+    await waitFor(() => expect(ui.getByTestId('auto-setup-start-chatting')).toBeTruthy());
     expect(ui.queryByText('Choose models')).toBeNull();
     fireEvent.press(ui.getByText('Skip for Now'));
     expect(navigation.replace).toHaveBeenCalledWith('Main');

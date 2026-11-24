@@ -8,22 +8,30 @@ import { useTheme, useThemedStyles } from '../theme';
 import type { ThemeColors, ThemeShadows } from '../theme';
 
 /**
- * The header bar's surface: its own background and a soft edge shadow, so content scrolls under a
- * real bar instead of showing through it. Every screen's own header bar uses this too.
+ * The fill of every bar that stays put at the top (header, tabs, search): the screen's own living
+ * field, as the tabs always had. A white block over the header and search with the field showing
+ * only in the tab strip between them read as three pieces (Mac, 2026-11-19: "just extend the
+ * background that the tabs have"). The list sits below the bars, never behind them, so nothing
+ * shows through.
  */
-export const headerSurface = (colors: ThemeColors, shadows: ThemeShadows) => ({
-  backgroundColor: colors.background,
-  ...shadows.edge,
+const HEADER_FILL = 'transparent';
+
+/**
+ * The header bar's surface: the shared top fill and no shadow, so the bars and the page read as one
+ * continuous field (Mac, 2026-11-19: "we don't want any white of sorts"). Every screen's own header
+ * bar uses this too.
+ */
+export const headerSurface = (_colors: ThemeColors, _shadows: ThemeShadows) => ({
+  backgroundColor: HEADER_FILL,
 });
 
 /** Runs a header bar's background up under the status bar, so the two read as one surface. */
 export const HeaderStatusFill: React.FC = () => {
-  const { colors } = useTheme();
   const { top } = useSafeAreaInsets();
   return (
     <View
       pointerEvents="none"
-      style={[fillStyles.fill, { top: -top, height: top, backgroundColor: colors.background }]}
+      style={[fillStyles.fill, { top: -top, height: top, backgroundColor: HEADER_FILL }]}
     />
   );
 };
@@ -46,6 +54,11 @@ interface ScreenHeaderProps {
   onTitlePress?: () => void;
   /** What tapping the title does, for a screen reader ("Rename"). */
   titleHint?: string;
+  /**
+   * Another fixed bar (tabs, search) sits right under the header. The bars are one surface, so the
+   * edge and its shadow go under the last bar only, not between them.
+   */
+  barBelow?: boolean;
 }
 
 /**
@@ -68,6 +81,7 @@ export const ScreenHeader: React.FC<ScreenHeaderProps> = ({
   subtitle,
   variant = 'screen',
   onTitlePress,
+  barBelow = false,
   titleHint,
 }) => {
   const { colors } = useTheme();
@@ -89,7 +103,7 @@ export const ScreenHeader: React.FC<ScreenHeaderProps> = ({
 
   return (
     <View
-      style={[styles.header, variant === 'tab' && styles.tabHeader]}
+      style={[styles.header, variant === 'tab' && styles.tabHeader, barBelow && styles.joined]}
       testID={testID}
     >
       <HeaderStatusFill />
@@ -138,6 +152,8 @@ const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     ...headerSurface(colors, shadows),
     zIndex: 1,
   },
+  // The bar under it carries the edge.
+  joined: { borderBottomWidth: 0, boxShadow: 'none' },
   tabHeader: {
     paddingVertical: SPACING.xs,
     minHeight: 52,

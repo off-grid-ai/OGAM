@@ -22,6 +22,8 @@ export interface ToolCall {
   id?: string;
   name: string;
   arguments: Record<string, any>;
+  /** Why the model's arguments could not be read (broken JSON). The loop asks for a repair. */
+  argumentsError?: string;
   context?: {
     /** Portable chat identity. Remote action tools bind approval and progress to this chat. */
     conversationId?: string;

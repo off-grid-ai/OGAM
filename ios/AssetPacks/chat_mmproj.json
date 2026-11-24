@@ -1,0 +1,13 @@
+{
+	"assetPackID": "chat_mmproj",
+	"downloadPolicy": {
+		"prefetch": {
+			"installationEventTypes": ["firstInstallation"]
+		}
+	},
+	"fileSelectors": [
+		{ "file": "mmproj-LFM3-VL-2B-F16.gguf" },
+		{ "file": "LICENSE-LFM-Open-License-v1.0.txt" }
+	],
+	"platforms": ["iOS"]
+}

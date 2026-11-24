@@ -209,7 +209,9 @@ export function setAnalyticsConsent(
       if (before.usage || !after.usage) return;
       capture('analytics_opted_in', { source });
       // Auto Setup was shown before the person could opt in, so its start was not sent then.
-      if (source === 'setup') replayFlowStart('onboarding');
+      if (source !== 'setup') return;
+      replayFlowStart('onboarding');
+      sendPendingPicks();
     })
     .catch(ignore);
 }
@@ -484,20 +486,47 @@ async function snapshotFeaturesDaily(): Promise<void> {
 
 // ── flows ──────────────────────────────────────────────────────────────────────
 
-const flows = new Map<Flow, { startedAt: number; lastStep?: string }>();
+const flows = new Map<Flow, { startedAt: number; lastStep?: string; steps: Properties[] }>();
 
 export function flowStarted(flow: Flow, firstStep?: string, properties?: Properties): void {
-  flows.set(flow, { startedAt: Date.now() });
+  flows.set(flow, { startedAt: Date.now(), steps: [] });
   capture('flow_started', { flow });
   if (firstStep) flowStep(flow, firstStep, properties);
 }
 
-/** Send a flow's start again, keeping its clock: it began before the person opted in. */
+/** A step of a flow that may already be running (onboarding's picks come before model setup). */
+export function flowResumed(flow: Flow, step: string): void {
+  if (flows.has(flow)) flowStep(flow, step);
+  else flowStarted(flow, step);
+}
+
+/** Send a flow's start and its steps so far again, keeping its clock: it began before the person opted in. */
 function replayFlowStart(flow: Flow): void {
   const state = flows.get(flow);
   if (!state) return;
   capture('flow_started', { flow });
-  if (state.lastStep) capture('flow_step', { flow, step: state.lastStep });
+  for (const step of state.steps) capture('flow_step', { flow, ...step });
+}
+
+let pendingPicks: Properties | undefined;
+
+/**
+ * What the person picked in onboarding (group and feature ids), or that they skipped. It happens before
+ * they can opt in on model setup, so it is kept and sent then.
+ */
+export function onboardingPicked(picks: { groups: readonly string[]; parts: readonly string[] } | null): void {
+  pendingPicks = {
+    groups: picks ? picks.groups.join(',') : undefined,
+    features: picks ? picks.parts.join(',') : undefined,
+    skipped: picks === null,
+  };
+  if (client && consent().usage) sendPendingPicks();
+}
+
+function sendPendingPicks(): void {
+  if (!pendingPicks) return;
+  capture('onboarding_picks', pendingPicks);
+  pendingPicks = undefined;
 }
 
 /** A step counts only inside a flow that started. */
@@ -505,6 +534,7 @@ export function flowStep(flow: Flow, step: string, properties?: Properties): voi
   const state = flows.get(flow);
   if (!state || state.lastStep === step) return;
   state.lastStep = step;
+  state.steps.push({ step, ...properties });
   capture('flow_step', { flow, step, ...properties });
 }
 

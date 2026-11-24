@@ -74,6 +74,8 @@ describe('Auto Setup plans are the phone picks', () => {
       const App = require('../../../App').default;
       const app = render(React.createElement(App));
       expect(app.queryByTestId('auto-setup-plan-lean')).toBeNull();
+      // First launch leads with Start chatting; the plans are behind Choose another.
+      fireEvent.press(await waitFor(() => app.getByTestId('auto-setup-choose-another'), RENDER_WAIT));
       await waitFor(() => expect(app.getByTestId('auto-setup-plan-lean')).toBeTruthy(), RENDER_WAIT);
       const planModels: Partial<Record<keyof typeof PLAN_TO_PICK | 'lean', string>> = {};
       for (const tier of ['lean', ...Object.keys(PLAN_TO_PICK)] as Array<keyof typeof PLAN_TO_PICK | 'lean'>) {

@@ -198,6 +198,46 @@ describePro('Vault on the phone', () => {
     expect(view.getByText(/Nothing matches/)).toBeTruthy();
   });
 
+  it('search needs every word, wherever it is: site and name together find one account', async () => {
+    const phone = installPhone();
+    const { rtl, view } = openVault();
+    await view.findByTestId('vault-empty-new');
+    for (const [title, username, url] of [
+      ['Google', 'muhammad.ali@gmail.com', 'https://accounts.google.com'],
+      ['Google', 'sara@gmail.com', 'https://accounts.google.com'],
+      ['Apple ID', 'muhammad.ali@icloud.com', 'https://appleid.apple.com'],
+    ]) {
+      await rtl.act(() => phone.vault.save({ kind: 'login', title, username, password: 'pw', urls: [url!] }));
+    }
+    await rtl.waitFor(() => expect(listed(view)).toHaveLength(3));
+    const search = view.getByTestId('vault-search');
+    rtl.fireEvent.changeText(search, 'google muhammad ali');
+    expect(listed(view)).toEqual(['Google']);
+    expect(view.getByText('muhammad.ali@gmail.com')).toBeTruthy();
+    rtl.fireEvent.changeText(search, 'Ali Apple');
+    expect(listed(view)).toEqual(['Apple ID']);
+  });
+
+  it('the list copies a username or password in one tap, without opening the item', async () => {
+    const phone = installPhone();
+    const { rtl, view } = openVault();
+    await view.findByTestId('vault-empty-new');
+    await rtl.act(() =>
+      phone.vault.save({ kind: 'login', title: 'Mail', username: 'sam@example.com', password: 'hunter2', urls: [] }),
+    );
+    await rtl.waitFor(() => expect(listed(view)).toEqual(['Mail']));
+    jest.useFakeTimers();
+    rtl.fireEvent.press(view.getByLabelText('Copy password for Mail'));
+    rtl.fireEvent.press(view.getByLabelText('Copy username for Mail'));
+    expect(phone.clipboard).toEqual(['hunter2', 'sam@example.com']);
+    expect(view.queryByTestId('vault-item-screen')).toBeNull();
+    expect(view.queryByText('hunter2')).toBeNull();
+    rtl.act(() => {
+      jest.advanceTimersByTime(30_000);
+    });
+    expect(phone.clipboard).toEqual(['hunter2', 'sam@example.com', '']);
+  });
+
   it('an item hides its password until Show; Copy clears the clipboard after 30 seconds', async () => {
     const phone = installPhone();
     const { rtl, view } = openVault();

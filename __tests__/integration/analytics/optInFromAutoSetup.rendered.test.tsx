@@ -74,9 +74,11 @@ it('ticking the Auto Setup row sends opt-in and the reply outcome, never the cha
     'app_opened', 'app_backgrounded', '$screen', 'analytics_opted_in', 'model_loaded',
     'generation_finished', 'chat_created', 'message_sent', 'features_snapshot',
     'flow_started', 'flow_step', 'flow_finished', 'model_selected', 'first_message', 'session_summary',
-    'usage_snapshot', 'boost_promo_shown',
+    'usage_snapshot', 'boost_promo_shown', 'onboarding_picks',
   ]);
   expect(endpoint.events.map(e => e.event).filter(name => !listed.has(name))).toEqual([]);
+  // Onboarding's picks were skipped before the opt-in, and arrive with it.
+  expect(endpoint.named('onboarding_picks').map(e => e.properties.skipped)).toEqual([true]);
   // Only event batches: no flags, no remote config, no surveys.
   expect(endpoint.urls.every(url => url === 'https://eu.i.posthog.com/batch/')).toBe(true);
   // Never the chat, never a file name.

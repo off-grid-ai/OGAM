@@ -15,6 +15,8 @@ import type {
 } from '../../../src/services/modelDownloadService/types';
 import { uniformDownloadId } from '../../../src/services/modelDownloadService/uniformId';
 import { useAppStore } from '../../../src/stores';
+import { useDownloadStore } from '../../../src/stores/downloadStore';
+import { createDownloadedModel } from '../../utils/factories';
 
 const MB = 1024 * 1024;
 // The size the fake listing gives a repo follows its parameter count, read from the repo name
@@ -166,7 +168,7 @@ const catalogBoundaries: AutoSetupCatalogBoundaries = {
 };
 
 describe('Auto Setup release journey', () => {
-  const navigation = { navigate: jest.fn(), push: jest.fn(), replace: jest.fn(), goBack: jest.fn(), canGoBack: () => false } as any;
+  const navigation = { navigate: jest.fn(), push: jest.fn(), replace: jest.fn(), reset: jest.fn(), goBack: jest.fn(), canGoBack: () => false } as any;
   const textDownloads = new NativeDownloadBoundary('text');
   const imageDownloads = new NativeDownloadBoundary('image');
   const speechDownloads = new NativeDownloadBoundary('stt');
@@ -207,15 +209,21 @@ describe('Auto Setup release journey', () => {
       speechDownloads.remove(),
     ]);
     unregister.forEach(dispose => dispose());
+    // A chat model left on the phone or on its way would make the next Start chatting skip its download.
+    useDownloadStore.setState({ downloads: {} });
+    useAppStore.setState({ downloadedModels: [], onboardingPicks: null });
   });
 
   it('selects a device-fit plan, starts all model downloads, and activates it', async () => {
+    // Opened from the app (Choose models): the plans show at once and the download finishes here.
+    const fromApp = { ...navigation, canGoBack: () => true };
     const ui = render(
       <AutoSetupScreen
-        navigation={navigation}
+        navigation={fromApp}
         sessionFactory={sessionFactory}
       />,
     );
+    expect(ui.queryByTestId('auto-setup-back-to-quick-start')).toBeNull();
     await waitFor(() =>
       expect(ui.getByTestId('auto-setup-plan-balanced')).toBeTruthy(),
     );
@@ -251,7 +259,160 @@ describe('Auto Setup release journey', () => {
       'unsloth/Qwen3.5-9B-GGUF',
     );
     expect(useAppStore.getState().activeImageModelId).toBe('image-extreme');
-    expect(navigation.replace).toHaveBeenCalledWith('Main');
+    expect(navigation.goBack).toHaveBeenCalled();
+  });
+
+  it('first launch: Choose another has a way back to Start chatting', async () => {
+    const ui = render(<AutoSetupScreen navigation={navigation} sessionFactory={sessionFactory} />);
+    fireEvent.press(await waitFor(() => ui.getByTestId('auto-setup-choose-another')));
+    await waitFor(() => expect(ui.getByTestId('auto-setup-plan-lean')).toBeTruthy());
+    expect(ui.queryByTestId('auto-setup-start-chatting')).toBeNull();
+
+    fireEvent.press(ui.getByTestId('auto-setup-back-to-quick-start'));
+
+    expect(ui.getByTestId('auto-setup-start-chatting')).toBeTruthy();
+    expect(ui.queryByTestId('auto-setup-plan-lean')).toBeNull();
+    expect(await modelDownloadService.list()).toEqual([]);
+  });
+
+  it('first launch: a download from the plans opens the chat at once, with the plan picked', async () => {
+    // iPhone hand test 2026-11-19: a plan download kept the person on setup, away from the chat.
+    textDownloads.completeOnStart = false;
+    const ui = render(<AutoSetupScreen navigation={navigation} sessionFactory={sessionFactory} />);
+    fireEvent.press(await waitFor(() => ui.getByTestId('auto-setup-choose-another')));
+    fireEvent.press(await waitFor(() => ui.getByTestId('auto-setup-plan-heading-balanced')));
+    expect(ui.getByText('MiniCPM5 2B')).toBeTruthy();
+
+    fireEvent.press(ui.getByTestId('auto-setup-download'));
+
+    await waitFor(() =>
+      expect(navigation.reset).toHaveBeenCalledWith({
+        index: 1,
+        routes: [{ name: 'Main' }, { name: 'Chat', params: {} }],
+      }),
+    );
+    const downloads = await modelDownloadService.list();
+    expect(downloads.map(d => [d.modelType, d.status])).toEqual([['text', 'downloading']]);
+    expect(downloads[0].name).not.toBe('Qwen3.5-0.8B-Q4_K_M.gguf');
+    expect(downloads[0].name).toMatch(/MiniCPM/i);
+  });
+
+  it('Start chatting downloads Quick start and opens a chat at once', async () => {
+    // PostHog 2026-11-19: a third of new people left setup without a download, and half of those who
+    // started one left before it finished. One tap starts the small model and opens the chat.
+    textDownloads.completeOnStart = false;
+    const ui = render(<AutoSetupScreen navigation={navigation} sessionFactory={sessionFactory} />);
+    await waitFor(() => expect(ui.getByTestId('auto-setup-start-chatting')).toBeTruthy());
+    // The plans wait behind Choose another; the quick start model is named with its size.
+    expect(ui.queryByTestId('auto-setup-plan-lean')).toBeNull();
+    expect(ui.getByText(/Qwen 3\.5 0\.8B/)).toBeTruthy();
+
+    fireEvent.press(ui.getByTestId('auto-setup-start-chatting'));
+
+    await waitFor(() =>
+      expect(navigation.reset).toHaveBeenCalledWith({
+        index: 1,
+        routes: [{ name: 'Main' }, { name: 'Chat', params: {} }],
+      }),
+    );
+    const downloads = await modelDownloadService.list();
+    expect(downloads.map(d => [d.modelType, d.status])).toEqual([['text', 'downloading']]);
+    expect(downloads[0].name).toBe('Qwen3.5-0.8B-Q4_K_M.gguf');
+  });
+
+  it('chooses what the background downloads bring after setup is gone', async () => {
+    textDownloads.completeOnStart = false;
+    const ui = render(<AutoSetupScreen navigation={navigation} sessionFactory={sessionFactory} />);
+    fireEvent.press(await waitFor(() => ui.getByTestId('auto-setup-start-chatting')));
+    await waitFor(() => expect(navigation.reset).toHaveBeenCalled());
+    ui.unmount();
+    expect(useAppStore.getState().activeModelId).toBeNull();
+
+    textDownloads.complete();
+
+    // Continue used to do this, and only on the screen: a person who left never got the model chosen.
+    await waitFor(() =>
+      expect(useAppStore.getState().activeModelId).toContain('unsloth/Qwen3.5-0.8B-GGUF'),
+    );
+  });
+
+  it('opens the chat for a chat model already on its way, and downloads no second one', async () => {
+    // A bundled model pack, or a download started earlier: that one is the chat model.
+    useDownloadStore.getState().add({
+      modelKey: 'LiquidAI/LFM3-VL-2B-GGUF/LFM3-VL-2B-Q4_K_M.gguf',
+      downloadId: 'bundled-pack:lfm3',
+      modelId: 'LiquidAI/LFM3-VL-2B-GGUF',
+      fileName: 'LFM3-VL-2B-Q4_K_M.gguf',
+      quantization: 'Q4_K_M',
+      modelType: 'text',
+      status: 'running',
+      bytesDownloaded: 0,
+      totalBytes: 1,
+      combinedTotalBytes: 1,
+      progress: 0.3,
+      createdAt: 1,
+    } as never);
+    const ui = render(<AutoSetupScreen navigation={navigation} sessionFactory={sessionFactory} />);
+    // The line names the model coming, not Quick start's, and offers no download size.
+    await waitFor(() => expect(ui.getByText('LFM3 VL 2B is on its way to this phone. Ask now. It answers as soon as it arrives.')).toBeTruthy());
+    expect(ui.queryByText(/Qwen 3\.5 0\.8B/)).toBeNull();
+    expect(ui.queryByText(/MB/)).toBeNull();
+    fireEvent.press(ui.getByTestId('auto-setup-start-chatting'));
+
+    await waitFor(() => expect(navigation.reset).toHaveBeenCalledWith({
+      index: 1,
+      routes: [{ name: 'Main' }, { name: 'Chat', params: {} }],
+    }));
+    expect(await modelDownloadService.list()).toEqual([]);
+  });
+
+  it('chooses a chat model already on the phone and opens the chat, with no download', async () => {
+    useAppStore.setState({ downloadedModels: [createDownloadedModel({ id: 'on-phone', name: 'On Phone' })], activeModelId: null });
+    const ui = render(<AutoSetupScreen navigation={navigation} sessionFactory={sessionFactory} />);
+    await waitFor(() => expect(ui.getByText('On Phone is ready on this phone. Ask now.')).toBeTruthy());
+    expect(ui.queryByText(/Qwen 3\.5 0\.8B/)).toBeNull();
+    fireEvent.press(ui.getByTestId('auto-setup-start-chatting'));
+
+    await waitFor(() => expect(navigation.reset).toHaveBeenCalled());
+    expect(useAppStore.getState().activeModelId).toBe('on-phone');
+    expect(await modelDownloadService.list()).toEqual([]);
+  });
+
+  it('with a chat model on the phone, shows the picks and Start chatting still downloads the other ones', async () => {
+    useAppStore.setState({
+      downloadedModels: [createDownloadedModel({ id: 'on-phone', name: 'On Phone' })],
+      activeModelId: null,
+      onboardingPicks: { groups: ['chat', 'create'], parts: ['chat', 'images'] },
+    });
+    const ui = render(<AutoSetupScreen navigation={navigation} sessionFactory={sessionFactory} />);
+    await waitFor(() => expect(ui.getByText('On Phone is ready on this phone. Ask now.')).toBeTruthy());
+    // Start chatting reads as the end of the person's setup: their picks sit right above it.
+    expect(ui.getByTestId('setup-picks')).toBeTruthy();
+    fireEvent.press(ui.getByTestId('auto-setup-start-chatting'));
+
+    await waitFor(() => expect(navigation.reset).toHaveBeenCalled());
+    expect(useAppStore.getState().activeModelId).toBe('on-phone');
+    // The picture model comes beside the chat model on the phone; no second chat model downloads.
+    await waitFor(async () =>
+      expect((await modelDownloadService.list()).map(d => d.modelType)).toEqual(['image']),
+    );
+  });
+
+  it('stays on setup with Try Again when Start chatting cannot start the download', async () => {
+    const refusing: AutoSetupDownloadBoundaries = {
+      ...downloadBoundaries,
+      start: () => Promise.reject({ message: 'No connection.' }),
+    };
+    const ui = render(
+      <AutoSetupScreen
+        navigation={navigation}
+        sessionFactory={() => createAutoSetupSession({ catalog: catalogBoundaries, downloads: refusing })}
+      />,
+    );
+    fireEvent.press(await waitFor(() => ui.getByTestId('auto-setup-start-chatting')));
+    expect(await ui.findByText('No connection.')).toBeTruthy();
+    expect(ui.getByTestId('auto-setup-retry')).toBeTruthy();
+    expect(navigation.reset).not.toHaveBeenCalled();
   });
 
   it('keeps manual model and remote server setup in Advanced Setup', async () => {
@@ -261,6 +422,8 @@ describe('Auto Setup release journey', () => {
         sessionFactory={sessionFactory}
       />,
     );
+    // First launch leads with Start chatting; the plans are behind Choose another.
+    fireEvent.press(await waitFor(() => ui.getByTestId('auto-setup-choose-another')));
     await waitFor(() =>
       expect(ui.getByTestId('auto-setup-advanced')).toBeTruthy(),
     );
@@ -291,6 +454,8 @@ describe('Auto Setup release journey', () => {
         }
       />,
     );
+    // First launch leads with Start chatting; the plans are behind Choose another.
+    fireEvent.press(await waitFor(() => ui.getByTestId('auto-setup-choose-another')));
     await waitFor(() =>
       expect(ui.getByTestId('auto-setup-download')).toBeTruthy(),
     );
@@ -313,6 +478,51 @@ describe('Auto Setup release journey', () => {
     });
   });
 
+  it('finishes when the last download ends while setup is still reading the one before', async () => {
+    // Android 2026-11-19: an image zip finished extracting while setup was still listing the
+    // 98% update; that last change was dropped, so setup sat at 98% with the model installed.
+    textDownloads.completeOnStart = false;
+    let holdList: Promise<void> | null = null;
+    let listStarted: () => void = () => undefined;
+    const slowList: AutoSetupDownloadBoundaries = {
+      ...downloadBoundaries,
+      list: async () => {
+        const listed = await modelDownloadService.list();
+        if (holdList) {
+          listStarted();
+          await holdList;
+        }
+        return listed;
+      },
+    };
+    const ui = render(
+      <AutoSetupScreen
+        navigation={navigation}
+        sessionFactory={() =>
+          createAutoSetupSession({ catalog: catalogBoundaries, downloads: slowList })
+        }
+      />,
+    );
+    // First launch leads with Start chatting; the plans are behind Choose another.
+    fireEvent.press(await waitFor(() => ui.getByTestId('auto-setup-choose-another')));
+    await waitFor(() => expect(ui.getByTestId('auto-setup-download')).toBeTruthy());
+    fireEvent.press(ui.getByTestId('auto-setup-download'));
+    await waitFor(async () =>
+      expect((await modelDownloadService.list()).map(d => d.status)).toEqual(['downloading']),
+    );
+
+    let release: () => void = () => undefined;
+    holdList = new Promise(resolve => { release = resolve; });
+    const started = new Promise<void>(resolve => { listStarted = resolve; });
+    textDownloads.setProgress(0.98);
+    await started;
+    holdList = null;
+    textDownloads.complete();
+    release();
+
+    await waitFor(() => expect(ui.getByTestId('auto-setup-continue')).toBeTruthy());
+  });
+
   it('keeps central download records alive after setup unmounts', async () => {
     textDownloads.completeOnStart = false;
     imageDownloads.completeOnStart = false;
@@ -323,6 +533,8 @@ describe('Auto Setup release journey', () => {
         sessionFactory={sessionFactory}
       />,
     );
+    // First launch leads with Start chatting; the plans are behind Choose another.
+    fireEvent.press(await waitFor(() => ui.getByTestId('auto-setup-choose-another')));
     await waitFor(() =>
       expect(ui.getByTestId('auto-setup-download')).toBeTruthy(),
     );
@@ -370,6 +582,8 @@ describe('Auto Setup release journey', () => {
         sessionFactory={sessionFactory}
       />,
     );
+    // First launch leads with Start chatting; the plans are behind Choose another.
+    fireEvent.press(await waitFor(() => ui.getByTestId('auto-setup-choose-another')));
     await waitFor(() =>
       expect(ui.getByTestId('auto-setup-plan-balanced')).toBeTruthy(),
     );

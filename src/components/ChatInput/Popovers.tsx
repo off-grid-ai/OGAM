@@ -1,4 +1,5 @@
 import React from 'react';
+import { FEATURE_NAMES } from '@offgrid/features';
 import { View, Text, StyleSheet, Modal, TouchableWithoutFeedback, Dimensions } from 'react-native';
 import { TouchableOpacity } from '../Touchable';
 import Icon from 'react-native-vector-icons/Feather';
@@ -85,6 +86,8 @@ interface QuickSettingsPopoverProps {
   supportsToolCalling: boolean;
   enabledToolCount: number;
   onToolsPress?: () => void;
+  /** Tools tapped on a model that cannot use them: the composer says so, with Choose model. */
+  onToolsUnsupported?: () => void;
   mcpToolCount?: number;
   onMcpPress?: () => void;
 }
@@ -125,6 +128,7 @@ export const QuickSettingsPopover: React.FC<QuickSettingsPopoverProps> = ({
   supportsToolCalling,
   enabledToolCount,
   onToolsPress,
+  onToolsUnsupported,
   mcpToolCount = 0,
   onMcpPress,
 }) => {
@@ -262,7 +266,8 @@ export const QuickSettingsPopover: React.FC<QuickSettingsPopoverProps> = ({
                 onPress={() => {
                   triggerHaptic('impactLight');
                   onClose();
-                  if (supportsToolCalling) { onToolsPress?.(); }
+                  if (supportsToolCalling) onToolsPress?.();
+                  else onToolsUnsupported?.();
                 }}
               >
                 <Icon name="tool" size={16} color={toolIconColor} />
@@ -286,7 +291,7 @@ export const QuickSettingsPopover: React.FC<QuickSettingsPopoverProps> = ({
               >
                 <Icon name="package" size={16} color={colors.textSecondary} />
                 <Text style={[popoverStyles.rowLabel, { color: colors.text }]}>
-                  Pro tools
+                  {FEATURE_NAMES.connectors}
                 </Text>
                 {mcpToolCount > 0 && (
                   <QuickBadge tone="count" label={mcpToolCount} />

@@ -101,7 +101,7 @@ describe('remote reasoning controls through the Mobile chat UI', () => {
       editor.unmount();
 
       const chat = renderRoute('Chat');
-      fireEvent.press(await waitFor(() => chat.getByText('Select Model')));
+      fireEvent.press(await waitFor(() => chat.getByText('Choose model')));
       fireEvent.press(await waitFor(() => chat.getByText('Boolean Model')));
       fireEvent.press(await waitFor(() => chat.getByTestId('quick-settings-button')));
       const thinking = await waitFor(() => chat.getByTestId('quick-thinking-toggle'));

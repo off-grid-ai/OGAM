@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { View, Text } from 'react-native';
 import { TouchableOpacity } from '../Touchable';
 import { LoadingDots } from '../LoadingDots';
@@ -13,6 +13,10 @@ import { useResidentRows, ejectResident, type ModelRowLabels, type ModelRowType 
 import { remoteServerManager } from '../../services/remoteServerManager';
 import { useRemoteServerStore } from '../../stores/remoteServerStore';
 import logger from '../../utils/logger';
+import type { ReadinessAction } from '@offgrid/features';
+import { ReadinessLine } from '../ReadinessLine';
+import { useReadinessAction } from '../../hooks/useReadinessAction';
+import { useTextModelReadiness } from '../../hooks/useTextModelReadiness';
 
 // Defined in useResidentRows (breaks the sheet<->hook import cycle); re-exported here so existing
 // consumers (Home, Chat, ModelsSummaryRow) keep importing it from the sheet.
@@ -73,6 +77,23 @@ export const ModelsManagerSheet: React.FC<Props> = ({
   const [ejectingRow, setEjectingRow] = useState<ModelRowType | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [refreshError, setRefreshError] = useState<string | null>(null);
+  // No chat model, or its computer is asleep: say so above the rows with the step (a dash said nothing).
+  const text = useTextModelReadiness();
+  const runReadiness = useReadinessAction({ onChooseModel: () => onOpenRow('text'), onRetry: text.retry });
+  const pendingReadiness = useRef<ReadinessAction | null>(null);
+  const onReadinessAction = (action: ReadinessAction) => {
+    if (action.kind === 'retry') return runReadiness(action);
+    if (action.kind === 'choose-model') return onOpenRow('text');
+    // Models is a screen under this sheet: close first, then go.
+    pendingReadiness.current = action;
+    onClose();
+  };
+  const handleClosed = () => {
+    const action = pendingReadiness.current;
+    pendingReadiness.current = null;
+    if (action) runReadiness(action);
+    onClosed?.();
+  };
   const ejectRow = (row: ModelRowType) => {
     const resident = residentByRow[row];
     if (!resident || ejectingRow) return;
@@ -124,11 +145,12 @@ export const ModelsManagerSheet: React.FC<Props> = ({
       sheet="models-manager"
       visible={visible}
       onClose={onClose}
-      onClosed={onClosed}
+      onClosed={handleClosed}
       title="Models"
       enableDynamicSizing
     >
       <View style={styles.content}>
+        <ReadinessLine readiness={text.readiness} onAction={onReadinessAction} testID="models-text-readiness" />
         <ListGroup>
         {ROWS.map(row => {
           const isLoading =

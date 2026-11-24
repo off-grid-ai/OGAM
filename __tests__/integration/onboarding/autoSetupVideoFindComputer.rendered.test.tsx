@@ -85,6 +85,8 @@ describe('Auto Setup video on a small phone', () => {
 
       // BEFORE: the open plan's VIDEO row says videos are made on a computer, and offers to find it.
       const videoRow = () => within(app.getByTestId('auto-setup-selected-plan')).getByTestId('auto-setup-video-row');
+      // First launch leads with Start chatting; the plans are behind Choose another.
+      fireEvent.press(await waitFor(() => app.getByTestId('auto-setup-choose-another'), RENDER_WAIT));
       await waitFor(() => expect(videoRow()).toBeTruthy(), RENDER_WAIT);
       expect(within(videoRow()).getByText('Videos are made on your computer with Off Grid AI Desktop.')).toBeTruthy();
       expect(within(videoRow()).queryByText(`Videos are made on ${DESKTOP_NAME}.`)).toBeNull();

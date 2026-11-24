@@ -1,0 +1,26 @@
+Use case: ui-mockup.
+Create a polished, flat screenshot of the Off Grid AI browser extension welcome page, step 5 of 5. Output exactly 1536 x 1024 pixels, landscape, edge to edge.
+
+Input image: the attached desktop-how-it-works.jpg is the authoritative STYLE and FOOTER reference. Closely match its near-black field, subtle fine dot lattice, diffuse emerald light, quiet hairline glass surfaces, neutral typography and thin bottom footer. Adapt the content to the two cards specified below. Do not reproduce the reference's sidebar, embedded app screenshot or other copy.
+
+Background: near-black #0A0A0A, faint fine evenly spaced grey dot lattice, one very soft diffuse emerald glow near the top. Keep the glow restrained like the reference. No other decorative imagery.
+Typography: Geist sans, large light title and regular body; Geist Mono for small muted uppercase labels. Thin Phosphor-style line icons. Monochrome text hierarchy. Only accent #34D399, used in the single primary button, fifth active progress segment and small line icons. Hairline borders and translucent dark glass cards with rounded corners. No selected-card state is needed for these instructional cards.
+
+Composition: generous desktop margins, left-aligned content occupying the wide canvas. Near the top, small muted mono label, then a large light heading. Two equally sized glass cards side by side below, with balanced padding. Each card contains a small thin line icon, its name, exactly two short body sentences in muted grey, and one quiet outlined button. Keep the body text at a readable size and keep each sentence on one line if possible. Chat bubble icon in card 1; thin edit/pencil icon in card 2. Below the cards, the single muted settings sentence. Keep ample breathing room and a calm dense desktop UI character.
+
+Render only the following exact text, without quotation marks:
+Top mono label: "OFF GRID AI · YOUR PICKS"
+Main heading: "How it works"
+Left card name: "Chat"
+Left card first muted sentence: "Click Off Grid AI in your toolbar to open the side panel."
+Left card second muted sentence: "Ask about the page you're on."
+Left card outlined button: "Try it on this page"
+Right card name: "Fix and rewrite"
+Right card first muted sentence: "A small Off Grid AI mark shows under text boxes."
+Right card second muted sentence: "Click it to fix or rewrite what you wrote."
+Right card outlined button: "Try it on this page"
+Muted sentence below both cards: "Change your picks any time in Settings, What you use."
+
+Footer: a narrow full-width bottom bar, near-black translucent fill, thin top border, like the reference. At its left use only a faint short neutral line with no text, because no left-footer copy is supplied. In its centre, a short line of exactly FIVE separate horizontal progress segments, first four muted neutral grey, fifth active emerald. Under the progress segments render tiny muted mono text exactly "HOW IT WORKS". At the right place the quiet text button "Back", then the single emerald filled primary button "Open the side panel". Keep footer buttons legible with appropriate padding.
+
+Every specified string must be spelled and punctuated exactly, complete, legible and unclipped. The two identical outlined button labels must both appear. Add no other text. No PRO labels since neither card requests one. No emojis, color-coded badges, traffic lights, 3D, illustrations, browser chrome, device frame, watermark or additional screens. A single flat production-quality screenshot.

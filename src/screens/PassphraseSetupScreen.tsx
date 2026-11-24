@@ -182,6 +182,7 @@ export const PassphraseSetupScreen: React.FC<PassphraseSetupScreenProps> = ({
           </View>
 
           <Button
+            variant="hero"
             title={(() => {
               if (isSubmitting) return 'Saving...';
               return isChanging ? 'Change Passphrase' : 'Enable Lock';

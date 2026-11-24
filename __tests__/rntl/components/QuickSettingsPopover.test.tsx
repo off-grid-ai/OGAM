@@ -6,7 +6,7 @@
  *   when tools are enabled).
  * - The "Pro Tools" row (formerly "MCP") uses a package icon and shows a count badge
  *   for whatever is active across pro tools + MCP, hidden when nothing is active.
- * - Tools and Pro tools each end in a chevron: both open another screen.
+ * - Tools and Connectors each end in a chevron: both open another screen.
  */
 
 import React from 'react';
@@ -59,7 +59,7 @@ describe('QuickSettingsPopover', () => {
     const { getByText, queryByText, getByTestId, queryByTestId } = render(
       <QuickSettingsPopover {...baseProps} mcpToolCount={0} />,
     );
-    expect(getByText('Pro tools')).toBeTruthy();
+    expect(getByText('Connectors')).toBeTruthy();
     expect(queryByText('MCP')).toBeNull();
     const proRow = within(getByTestId('quick-pro-tools'));
     expect(proRow.getByTestId('feather-package')).toBeTruthy();

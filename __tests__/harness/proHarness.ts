@@ -193,6 +193,28 @@ export async function launchLicensedApp(options: {
 }
 
 /**
+ * Boot the licensed app once and close it, so the worker has transformed the app before a journey
+ * starts its clock. Call from `beforeAll`, with a hook timeout of its own.
+ *
+ * App requires most of src/ lazily as it boots, and Babel transforms each file the first time a
+ * worker requires it. On a cold transform cache the first launch in a worker took 12 s in CI (32 s
+ * measured locally) against 1.4 s warm, so the first journey of a suite failed its 10 s budget for
+ * time spent on what it does not check. installNativeBoundary gives every launch a fresh module
+ * registry, so this boot leaves no state behind: only the transformed files stay with the worker.
+ */
+export async function bootLicensedAppOnce(): Promise<void> {
+  const { createLicensedMesh } = require('./licensedMesh');
+  const mesh = createLicensedMesh();
+  mesh.reset();
+  try {
+    const app = await launchLicensedApp({ mesh, secrets: new Map() });
+    await app.close();
+  } finally {
+    mesh.restore();
+  }
+}
+
+/**
  * THE PAIRED-PEER OP INJECTOR — another device on the LAN, which is the sync boundary.
  *
  * Everything on the phone is real: its sync engine, its state sync, its op store, its materializer,

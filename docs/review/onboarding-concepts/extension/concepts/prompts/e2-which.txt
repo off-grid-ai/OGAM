@@ -1,0 +1,28 @@
+Use case: ui-mockup.
+Create a final, high-fidelity flat screenshot of the Off Grid AI browser extension welcome page, step 2 of 5. Output exactly 1536 x 1024 pixels, landscape, full canvas edge to edge.
+
+REFERENCE: The supplied refs/desktop-details.jpg is the design source. Copy its visual language and layout closely: left-aligned heading high on the page, a wide grid of quiet translucent horizontal feature rows beneath it, large calm dark space below the rows, fixed thin bottom footer. Adapt its grid to exactly TWO equal-width columns. The reference is for style and composition only: replace ALL reference text and content with the exact text specified below. Do not retain the license block, other reference columns, reference footer copy, or other reference controls.
+
+BACKGROUND AND STYLE: Near-black #0A0A0A with a faint regular fine dot lattice across the page, and just one very soft diffuse emerald glow near the top, slightly right of centre. Restrained, quiet, precise desktop software UI. Geist sans: large light title, regular body. Geist Mono: small uppercase muted labels with loose tracking. Neutral white and grey typography. Translucent dark glass rows, fine neutral hairline borders, rounded corners, extremely subtle top edge highlight. Selected rows have a thin emerald #34D399 border and a small emerald filled check circle at their upper right. Unselected rows have an empty neutral thin pick circle. Thin Phosphor-style neutral line icons beside names. One accent only: emerald #34D399 for the two selected states, active progress segment, and the single primary button. PRO labels are always small muted grey mono text, not coloured and not badges.
+
+COMPOSITION: 48 px left and right page margins. Top-left small mono label around y=170. Large light title below it, then a muted single-line subtitle. Two equal columns below, left starting x=48, right starting x=780, about 708 px wide each, with a 24 px gutter. Column labels around y=338. Rows start around y=365, about 78 px tall, with 10 px vertical gaps. Left column has three rows, right column has two. Within every row put a small line icon at left, then the feature name with its description below, and a small muted PRO label near the right before the pick circle. Align all text cleanly and keep generous room for every string. Do not add overall column cards. Keep the two columns top-aligned and every row height consistent.
+
+EXACT CONTENT, rendered verbatim without quotation marks:
+Top left mono label: "OFF GRID AI · IN YOUR BROWSER"
+Title: "Which ones?"
+Muted line: "We only set up what you pick. Change it any time."
+
+LEFT COLUMN mono heading: "CHAT AND ASK"
+Row 1: speech bubble line icon; name "Chat"; description "Ask about the page you're on"; muted right label "PRO"; PICKED, emerald outline and emerald check circle.
+Row 2: photo line icon; name "Ask about a photo"; description "Ask about a screenshot of this tab"; muted right label "PRO"; unpicked empty circle.
+Row 3: globe line icon; name "Web search and tools"; description "Fresh answers from the web"; muted right label "PRO"; unpicked empty circle.
+
+RIGHT COLUMN mono heading: "WRITE"
+Row 1: pen line icon; name "Fix and rewrite"; description "Grammar and tone in any text box"; muted right label "PRO"; PICKED, emerald outline and emerald check circle.
+Row 2: microphone line icon; name "Dictation"; description "Talk instead of typing"; muted right label "PRO"; unpicked empty circle.
+
+FOOTER: a fixed thin near-black bottom bar from approximately y=944 to y=1024 with one subtle top hairline. At left, small muted single-line text exactly "Works with Off Grid AI on your computer. Nothing goes to a cloud." Keep it fully legible and in one line; small neutral lock line icon is allowed immediately before it. In the horizontal centre, a short progress line made of exactly five equal short segments, segment 2 emerald active and segments 1, 3, 4, 5 muted neutral grey; below it tiny mono step label "WHICH ONES". At right, quiet text button "Back", then one emerald rounded primary button labelled "Continue". Use a small neutral right-arrow line icon inside the primary button if appropriate to the reference.
+
+TEXT REQUIREMENTS: Every quoted string must appear exactly as written, with exact spelling, punctuation, apostrophe, case and middle dot. All text crisp, clean, legible and unclipped. There are exactly five PRO labels, one per row. The full footer sentence must fit without wrapping or colliding with progress or buttons. Add no other copy.
+
+AVOID: emojis, any second accent colour, coloured PRO labels, coloured badges, traffic lights, thick borders, excessive glow, decorative effects, illustrations, 3D, browser chrome, device frames, perspective, watermark, extra copy, duplicate controls. The image itself is the screenshot.

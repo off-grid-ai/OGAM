@@ -104,4 +104,45 @@ describePro('Improve choices', () => {
     expect(view.queryByTestId('improve-option-0')).toBeNull();
     expect(boundary.llama!.calls.completion.length).toBe(calls);
   });
+
+  it('Translate names my app language and writes the version in it', async () => {
+    const boundary = installPhone();
+    // The app language is German: the person reads this screen in it, so Translate writes in it.
+    const { applyAppLanguage } = require('../../../src/i18n/appLanguage') as typeof import('../../../src/i18n/appLanguage');
+    applyAppLanguage('de', []);
+    await loadTextModel(boundary);
+    boundary.llama!.scriptCompletion({ text: 'Könntest du mir heute den Bericht schicken?' });
+    boundary.llama!.scriptCompletion({ text: 'Könntest du mir heute den Bericht schicken?' });
+    const { rtl, view } = openImprove('could you send me the report today');
+
+    const translate = view.getByTestId('improve-action-translate');
+    expect(translate).toHaveTextContent('Auf Deutsch übersetzen');
+    rtl.fireEvent.press(translate);
+
+    await rtl.waitFor(() =>
+      expect(view.getByTestId('improve-option-0')).toHaveTextContent('Könntest du mir heute den Bericht schicken?'),
+    );
+    expect(chosen(view, 'improve-action-translate')).toBe(true);
+    expect(JSON.stringify(boundary.llama!.calls.completion.at(-1))).toMatch(/German/);
+    applyAppLanguage(null, []);
+  });
+
+  it('Share sends the chosen version to the OS share sheet, beside Copy', async () => {
+    const boundary = installPhone();
+    await loadTextModel(boundary);
+    boundary.llama!.scriptCompletion({ text: 'Could you send the report today?' });
+    const RN = require('react-native') as typeof import('react-native');
+    // The share sheet is the device boundary.
+    const sheet = jest.spyOn(RN.Share, 'share').mockResolvedValue({ action: 'sharedAction' });
+    const { rtl, view } = openImprove('pls send me the report today');
+    await rtl.waitFor(() =>
+      expect(view.getByTestId('improve-option-0')).toHaveTextContent('Could you send the report today?'),
+    );
+
+    rtl.fireEvent.press(view.getByTestId('improve-share'));
+
+    expect(sheet).toHaveBeenCalledWith({ message: 'Could you send the report today?' });
+    expect(view.getByTestId('improve-apply')).toHaveTextContent('Copy');
+    sheet.mockRestore();
+  });
 });

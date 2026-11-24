@@ -2,7 +2,7 @@
  * useChatMessageHandlers — Resend/Retry and edit-and-resend with no model.
  *
  * Regression: ejecting every model and then tapping Resend/Retry used to do nothing at all (no message, no
- * feedback). Now it shows "No Model Selected", as the send path does, and leaves the chat as it was.
+ * feedback). Now it says "Needs a chat model." with Get a model, as the send path does, and leaves the chat as it was.
  *
  * Real: the handlers, the chat store (a real conversation and its actions), the residency manager and
  * hardware readings they log, the alert builder. Nothing is faked: the no-model path bails before any
@@ -30,7 +30,7 @@ function screen() {
 const contents = (messages: Array<{ role: string; content: string }>) => messages.map(m => `${m.role}:${m.content}`);
 
 describe('handleRetryMessageFn — no model', () => {
-  it('shows "No Model Selected" and leaves the chat as it was', async () => {
+  it('says a chat model is needed and leaves the chat as it was', async () => {
     const chat = chatWithOneTurn();
     const before = contents(chat.thread());
     const { s, genDeps } = screen();
@@ -42,7 +42,7 @@ describe('handleRetryMessageFn — no model', () => {
       setDebugInfo: () => {},
     });
 
-    expect(s.alert).toEqual(expect.objectContaining({ visible: true, title: 'No Model Selected' }));
+    expect(s.alert).toEqual(expect.objectContaining({ visible: true, title: 'Needs a chat model.' }));
     expect(contents(chat.thread())).toEqual(before); // the answer is not deleted, nothing new is asked
   });
 
@@ -64,7 +64,7 @@ describe('handleRetryMessageFn — no model', () => {
 });
 
 describe('handleEditMessageFn — no model', () => {
-  it('shows "No Model Selected" and keeps the question as it was', async () => {
+  it('says a chat model is needed and keeps the question as it was', async () => {
     const chat = chatWithOneTurn();
     const before = contents(chat.thread());
     const { s, genDeps } = screen();
@@ -79,7 +79,7 @@ describe('handleEditMessageFn — no model', () => {
       setDebugInfo: () => {},
     });
 
-    expect(s.alert).toEqual(expect.objectContaining({ visible: true, title: 'No Model Selected' }));
+    expect(s.alert).toEqual(expect.objectContaining({ visible: true, title: 'Needs a chat model.' }));
     expect(contents(chat.thread())).toEqual(before); // no edited version, no new reply
   });
 });

@@ -1,0 +1,13 @@
+{
+	"assetPackID": "chat_model",
+	"downloadPolicy": {
+		"prefetch": {
+			"installationEventTypes": ["firstInstallation"]
+		}
+	},
+	"fileSelectors": [
+		{ "file": "LFM3-VL-2B-Q4_K_M.gguf" },
+		{ "file": "LICENSE-LFM-Open-License-v1.0.txt" }
+	],
+	"platforms": ["iOS"]
+}

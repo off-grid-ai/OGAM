@@ -3,6 +3,8 @@
  * opened to `{"search_id": …, "results": [{"excerpts": ["…\n…"]}]}`).
  */
 import { readableToolResult } from '../../../src/components/ChatMessage/components/ToolMessages';
+import { buildMessageData } from '../../../src/components/ChatMessage/utils';
+import type { Message } from '../../../src/types';
 
 describe('readableToolResult', () => {
   it('turns a search JSON into titled, linked sources with a short excerpt', () => {
@@ -27,5 +29,16 @@ describe('readableToolResult', () => {
     expect(readableToolResult(cut)).toBe(
       '1. [Sinhagad Fort trek](https://trails.example/sinhagad)\n2. [Rajmachi](https://trails.example/rajmachi)',
     );
+  });
+
+  it('shows a task launch note as its outcome, never the orders written for the model', () => {
+    const note = 'Task reference: t-9. Web Use started. Live progress and the final result will appear in this chat. Do not call web_use again for this goal.';
+    expect(readableToolResult(note)).toBe('Task started.');
+  });
+
+  it('shows a reply saved as a launch note as its outcome (synced from the desktop)', () => {
+    const content = 'Task reference: t-9. Web Use started. Live progress and the final result will appear in this chat. Do not call web_use again for this goal.';
+    const { displayContent } = buildMessageData({ id: 'm1', role: 'assistant', content, timestamp: 0 } as Message);
+    expect(displayContent).toBe('Task started.');
   });
 });

@@ -2,18 +2,17 @@
  * The one action under a guide topic: open it on this phone, get Pro for it, or get it where it
  * lives (the desktop app, the browser extension). A topic with nowhere to go has no button.
  */
-import { Linking } from 'react-native';
+import { useOpenScribe } from '../../hooks/useOpenScribe';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { GUIDE_LINKS } from '@offgrid/models';
 import type { RootStackParamList } from '../../navigation/types';
-import { useAppStore } from '../../stores';
+import { useAppStore, useRemoteServerStore } from '../../stores';
 import { selectHasProAccess } from '../../stores/proAccessSlice';
 import { useHasRegisteredScreen } from '../../navigation/screenRegistry';
 import { useGetPro } from '../../hooks/useGetPro';
 import { useOpenSync } from '../../hooks/useOpenSync';
 import { useOpenProTools } from '../../hooks/useOpenProTools';
-import { withUtm } from '../../utils/utm';
+import { useOtherProduct } from '../../hooks/useOtherProduct';
 import type { GuideOpen, MobileGuideTopic } from './guideTopics';
 
 export interface GuideAction {
@@ -27,13 +26,16 @@ export interface GuideAction {
 
 const OPEN_LABEL: Record<GuideOpen, string> = {
   chat: 'Start a chat',
+  images: 'Make a picture',
+  video: 'Make a video',
   projects: 'Open Projects',
   models: 'Open Models',
   notes: 'Open Notes',
   vault: 'Open Vault',
-  sync: 'Open Devices',
+  sync: 'Open Sync',
   clipboard: 'Open Clipboard',
-  tools: 'Open Tools',
+  tools: 'Open Connectors',
+  improve: 'Try Scribe',
 };
 
 /** Pro screens: they exist on this phone only when Pro registered them. */
@@ -47,9 +49,14 @@ export function useGuideAction(): (topic: MobileGuideTopic) => GuideAction | nul
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const hasPro = useAppStore(selectHasProAccess);
   const hasChatModel = useAppStore(s => Boolean(s.activeModelId));
+  const hasImageModel = useAppStore(s => s.downloadedImageModels.length > 0);
+  const hasVideoModel = useAppStore(s => s.downloadedVideoModels.length > 0);
+  const remoteMedia = useRemoteServerStore(s => s.activeRemoteMediaServerIds);
   const getPro = useGetPro();
   const { openSync } = useOpenSync();
   const openTools = useOpenProTools();
+  const openScribe = useOpenScribe();
+  const otherProduct = useOtherProduct('guide');
   const registered: Record<string, boolean> = {
     Notes: useHasRegisteredScreen('Notes'),
     Vault: useHasRegisteredScreen('Vault'),
@@ -63,6 +70,17 @@ export function useGuideAction(): (topic: MobileGuideTopic) => GuideAction | nul
         if (hasChatModel) navigation.navigate('Chat', {});
         else navigation.navigate('Main', { screen: 'ModelsTab' } as never);
         return;
+      case 'images':
+        // Pictures need an image model; without one, the Image models are the next step.
+        if (hasImageModel || remoteMedia.image) navigation.navigate('Chat', { mode: 'image' });
+        else navigation.navigate('Main', { screen: 'ModelsTab', params: { initialTab: 'image' } } as never);
+        return;
+      case 'video':
+        // With any model the chat opens: its video switch offers a video model, or the computer, as
+        // this phone allows. With none, the Video models are the next step.
+        if (hasVideoModel || remoteMedia.video || hasChatModel) navigation.navigate('Chat', { mode: 'video' });
+        else navigation.navigate('Main', { screen: 'ModelsTab', params: { initialTab: 'video' } } as never);
+        return;
       case 'projects':
         navigation.navigate('Main', { screen: 'ProjectsTab' } as never);
         return;
@@ -74,6 +92,9 @@ export function useGuideAction(): (topic: MobileGuideTopic) => GuideAction | nul
         return;
       case 'tools':
         openTools();
+        return;
+      case 'improve':
+        openScribe();
         return;
       default: {
         const screen = PRO_SCREEN[open];
@@ -95,16 +116,8 @@ export function useGuideAction(): (topic: MobileGuideTopic) => GuideAction | nul
         onPress: () => (locked ? getPro('guide') : go(open)),
       };
     }
-    if (topic.get && topic.get !== 'mobile') {
-      const url = withUtm(GUIDE_LINKS[topic.get], 'guide');
-      return {
-        label: 'Get it',
-        icon: 'external-link',
-        locked: false,
-        external: true,
-        onPress: () => { Linking.openURL(url).catch(() => undefined); },
-      };
-    }
+    // It lives in another app: Get it, or Open when that app is already paired (the shared rule).
+    if (topic.get && topic.get !== 'mobile') return { ...otherProduct(topic.get), locked: false };
     return null;
   };
 }

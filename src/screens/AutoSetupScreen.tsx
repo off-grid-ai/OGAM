@@ -20,7 +20,7 @@ import {
 } from '../services/autoSetupService';
 import {
   flowFinished,
-  flowStarted,
+  flowResumed,
   proGateShown,
   setAnalyticsConsent,
 } from '../services/analytics/analytics';
@@ -30,6 +30,9 @@ import { useRemoteServerStore } from '../stores/remoteServerStore';
 import { useTheme, useThemedStyles } from '../theme';
 import type { ThemeColors, ThemeShadows } from '../theme';
 import { useGetPro } from '../hooks/useGetPro';
+import { takeChatModelOnHand, useChatModelOnHand } from '../services/arrivingChatModel';
+import { t } from '@offgrid/i18n';
+import { PickedChips } from './OnboardingPicks/PickedChips';
 
 const productionSessionFactory = (): AutoSetupSession =>
   createAutoSetupSession();
@@ -72,6 +75,9 @@ export const AutoSetupScreen: React.FC<Props> = ({
   const [expandedTier, setExpandedTier] = useState<AutoSetupTier | null>(
     () => session.snapshot().selectedTier,
   );
+  // First launch leads with one action: chat now on Quick start. The plans are one tap away.
+  const [showPlans, setShowPlans] = useState(openedFromApp);
+  const [startingChat, setStartingChat] = useState(false);
 
   useEffect(() => {
     session.load().catch(() => undefined);
@@ -79,7 +85,7 @@ export const AutoSetupScreen: React.FC<Props> = ({
   }, [session]);
 
   useEffect(() => {
-    flowStarted('onboarding', 'setup_shown');
+    flowResumed('onboarding', 'setup_shown');
   }, []);
 
   const [shareAnalytics, setShareAnalytics] = useState(
@@ -122,6 +128,52 @@ export const AutoSetupScreen: React.FC<Props> = ({
           (sum, outcome) => sum + (outcome?.progress ?? 0),
           0,
         ) / selectedOutcomes.length;
+  const quickStart = snapshot.plans.find(plan => plan.tier === 'lean');
+  const quickStartChat = quickStart?.items[0];
+  // What else the person picked (pictures, voice) comes with Quick start, after the chat model.
+  const quickStartExtraBytes = [...(quickStart?.items ?? []), ...(quickStart?.embedding ? [quickStart.embedding] : [])]
+    .filter(item => item.kind !== 'text' && snapshot.selectedKinds.includes(item.kind)
+      && autoSetupItemNeedsAction(item, snapshot.installedIds)
+      && !snapshot.installedIds.includes(autoSetupDownloadId(item)))
+    .reduce((total, item) => total + item.sizeBytes, 0);
+  // Start chatting uses a chat model already on hand rather than download Quick start's, so the line
+  // names the model the person gets.
+  const onHand = useChatModelOnHand();
+  const heroLine = onHand?.name
+    ? onHand.arriving
+      ? t('{0} is on its way to this phone. Ask now. It answers as soon as it arrives.', onHand.name)
+      : t('{0} is ready on this phone. Ask now.', onHand.name)
+    : [
+        quickStartChat && `${quickStartChat.name} · ${formatBytes(quickStartChat.sizeBytes)}.`,
+        t('Ask now. It answers as soon as it is on your phone.'),
+      ].filter(Boolean).join(' ');
+  // Start a plan's downloads, then open a chat at once: the model answers when it arrives. Start
+  // chatting takes Quick start; on first launch a download from the plans takes the plan picked.
+  const startChatting = async (tier?: AutoSetupTier) => {
+    markConsentAsked();
+    // A chat model already on hand (on the phone, or on its way: a bundled model pack, a download
+    // started earlier) is the chat model: open the chat for it rather than download a second one.
+    // A plan picked by name is downloaded as asked.
+    if (!tier && takeChatModelOnHand()) {
+      // The person's other picks (pictures, voice) still come, in the background, beside that model.
+      if (quickStartExtraBytes > 0) {
+        if (session.snapshot().selectedKinds.includes('text')) session.toggleKind('text');
+        await session.startInBackground().catch(ignore);
+      }
+      navigation.reset({ index: 1, routes: [{ name: 'Main' }, { name: 'Chat', params: {} }] });
+      return;
+    }
+    setStartingChat(true);
+    try {
+      await session.startInBackground(tier);
+    } finally {
+      setStartingChat(false);
+    }
+    const phase = session.snapshot().phase;
+    if (phase === 'failed') return;
+    if (phase === 'completed') session.complete();
+    navigation.reset({ index: 1, routes: [{ name: 'Main' }, { name: 'Chat', params: {} }] });
+  };
   const isComplete = snapshot.phase === 'completed';
   const starting = snapshot.phase === 'downloading';
 
@@ -145,10 +197,56 @@ export const AutoSetupScreen: React.FC<Props> = ({
         contentContainerStyle={styles.content}
         testID="auto-setup-screen"
       >
-        <Text style={styles.title}>Choose model downloads.</Text>
-        <Text style={styles.secondary}>
-          Installed models add no download size.
-        </Text>
+        {showPlans ? (
+          <>
+            {/* First launch: the plans are one tap from Start chatting, and one tap back to it. */}
+            {!openedFromApp && (
+              <Button
+                title="Back to Start chatting"
+                variant="ghost"
+                size="small"
+                style={styles.backToQuickStart}
+                onPress={() => setShowPlans(false)}
+                disabled={starting || startingChat}
+                testID="auto-setup-back-to-quick-start"
+              />
+            )}
+            <Text style={styles.title}>Choose model downloads.</Text>
+            <Text style={styles.secondary}>
+              Installed models add no download size.
+            </Text>
+          </>
+        ) : (
+          <View style={styles.hero} testID="auto-setup-quick-start">
+            <Text style={styles.title}>Chat with your own AI.</Text>
+            <Text style={styles.secondary}>
+              {heroLine}
+            </Text>
+            <PickedChips />
+            {quickStartExtraBytes > 0 && (
+              <Text style={styles.secondary} testID="auto-setup-extras">
+                {`Your other picks (${formatBytes(quickStartExtraBytes)}) download in the background.`}
+              </Text>
+            )}
+            <Text style={styles.secondary}>It runs on this phone. Your chats never leave it.</Text>
+            <Button
+              title="Start chatting"
+              variant="hero"
+              onPress={() => { startChatting().catch(() => undefined); }}
+              loading={startingChat}
+              disabled={!quickStartChat || startingChat}
+              testID="auto-setup-start-chatting"
+            />
+            <Button
+              title="Choose another"
+              variant="ghost"
+              style={styles.textAction}
+              onPress={() => setShowPlans(true)}
+              disabled={startingChat}
+              testID="auto-setup-choose-another"
+            />
+          </View>
+        )}
 
         {snapshot.error && (
           <Card style={styles.errorCard}>
@@ -156,7 +254,9 @@ export const AutoSetupScreen: React.FC<Props> = ({
             <Button
               title="Try Again"
               onPress={() => {
-                if (snapshot.plans.length)
+                if (snapshot.plans.length && !showPlans)
+                  startChatting().catch(() => undefined);
+                else if (snapshot.plans.length)
                   session.start().catch(() => undefined);
                 else session.load().catch(() => undefined);
               }}
@@ -199,7 +299,7 @@ export const AutoSetupScreen: React.FC<Props> = ({
           </Text>
         </View>
 
-        <View style={styles.planGrid}>
+        {showPlans && <View style={styles.planGrid}>
           {snapshot.plans.map(plan => (
             <Card
               key={plan.tier}
@@ -325,6 +425,7 @@ export const AutoSetupScreen: React.FC<Props> = ({
                   )}
                   {isComplete ? (
                     <Button
+                      variant="hero"
                       title="Continue"
                       onPress={() => {
                         session.complete();
@@ -342,10 +443,17 @@ export const AutoSetupScreen: React.FC<Props> = ({
                       }
                       onPress={() => {
                         markConsentAsked();
+                        // First launch: the chat opens now, as with Start chatting, and the plan's
+                        // models finish in the background. From the app, the plan downloads here.
+                        if (!openedFromApp && snapshot.phase !== 'failed' && selectedBytes > 0 && snapshot.selectedTier) {
+                          startChatting(snapshot.selectedTier).catch(() => undefined);
+                          return;
+                        }
                         session.start().catch(() => undefined);
                       }}
-                      loading={starting}
+                      loading={starting || startingChat}
                       disabled={selectedItems.length === 0}
+                      variant="hero"
                       testID="auto-setup-download"
                     />
                   )}
@@ -361,7 +469,7 @@ export const AutoSetupScreen: React.FC<Props> = ({
               )}
             </Card>
           ))}
-        </View>
+        </View>}
 
         {VoiceIndicator ? (
           <VoiceIndicator
@@ -443,6 +551,8 @@ const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     padding: SPACING.xl,
   },
   title: { ...TYPOGRAPHY.h2, color: colors.text, textAlign: 'left' as const },
+  hero: { gap: SPACING.md },
+  backToQuickStart: { alignSelf: 'flex-start' as const, paddingHorizontal: 0 },
   secondary: { ...TYPOGRAPHY.body, color: colors.textSecondary, textAlign: 'left' as const },
   planGrid: { gap: SPACING.sm },
   planCard: {

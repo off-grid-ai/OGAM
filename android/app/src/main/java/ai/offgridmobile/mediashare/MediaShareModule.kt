@@ -20,7 +20,13 @@ class MediaShareModule(reactContext: ReactApplicationContext) :
     override fun getName(): String = "MediaShareModule"
 
     @ReactMethod
-    fun shareFile(path: String, mime: String, promise: Promise) {
+    fun shareFile(path: String, mime: String, promise: Promise) = share(path, mime, null, promise)
+
+    /** The same, with a line of text beside the file (the share mark's link). */
+    @ReactMethod
+    fun shareFileWithText(path: String, mime: String, text: String, promise: Promise) = share(path, mime, text, promise)
+
+    private fun share(path: String, mime: String, text: String?, promise: Promise) {
         val context = reactApplicationContext
         val file = File(path).canonicalFile
         val root = context.filesDir.canonicalFile
@@ -32,6 +38,7 @@ class MediaShareModule(reactContext: ReactApplicationContext) :
         val send = Intent(Intent.ACTION_SEND).apply {
             type = mime
             putExtra(Intent.EXTRA_STREAM, uri)
+            if (text != null) putExtra(Intent.EXTRA_TEXT, text)
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
         val chooser = Intent.createChooser(send, null).apply {

@@ -1,3 +1,4 @@
+import { t } from '@offgrid/i18n';
 export {
   MODEL_RECOMMENDATIONS,
   RECOMMENDED_MODELS,
@@ -155,55 +156,22 @@ If asked about yourself, say you are Off Grid AI, running privately on this phon
   maxContextLength: 4096, // Default context window; eliminates double-init on models that support ≥4096
 };
 
-export interface OnboardingSlide {
-  id: string;
+export interface OnboardingIntro {
   keyword: string;
   title: string;
   description: string;
 }
 
-// Core onboarding slides. Optional feature packages contribute additional slide data through the
-// onboarding.additionalSlides hook so Core keeps one renderer without advertising unavailable
-// features in free builds.
-import { boostPromoCopy } from '@offgrid/models';
-
-export const ONBOARDING_SLIDES: readonly OnboardingSlide[] = [
-  {
-    id: 'freedom',
-    keyword: 'YOURS',
-    title: 'Your AI.\nNo Strings Attached.',
-    description:
-      'No subscriptions, no sign-ups, no company reading your chats. An AI that lives on your device and answers to no one else.',
-  },
-  {
-    id: 'magic',
-    keyword: 'MAGIC',
-    title: 'Just Talk.\nIt Figures Out the Rest.',
-    description:
-      'Describe an image \u2014 it creates one. Show it a photo \u2014 it understands. Attach a document \u2014 it reads it. One conversation, no modes, no friction.',
-  },
-  {
-    id: 'create',
-    keyword: 'CREATE',
-    title: 'Say It Simply.\nGet Something Stunning.',
-    description:
-      'Type \u201Cimagine a cat on the moon\u201D and watch your words become a vivid image in seconds. AI enhances your ideas automatically \u2014 no prompt engineering needed.',
-  },
-  {
-    // The private cloud offer (shared copy): models too big for the phone, on our servers.
-    id: 'boost',
-    keyword: 'BIGGER',
-    title: 'Smarter Answers,\nWithout a Bigger Phone.',
-    description: boostPromoCopy('phone').body,
-  },
-  {
-    id: 'hardware',
-    keyword: 'READY',
-    title: 'Powered\nYour Way.',
-    description:
-      'Run models on your phone with Metal and Neural Engine acceleration \u2014 or connect to powerful models already on your home network. We\u2019ll find the best setup for you.',
-  },
-];
+// The one page about Off Grid AI before "What do you want to do?". What it does for you is shown by
+// the picks that follow, so this page says only what it is. Built when shown, so it reads in the app
+// language (text in code reaches a catalog through t()).
+export const onboardingIntro = (): OnboardingIntro => ({
+  keyword: t('YOURS'),
+  title: t('Your AI.\nNo Strings Attached.'),
+  description: t(
+    'No subscriptions, no sign-ups, no company reading your chats. An AI that lives on your device and answers to no one else.',
+  ),
+});
 
 // Fonts, type, spacing, radius and the living field come from @offgrid/design (the one token source).
 import { FONTS, TYPOGRAPHY, SPACING, RADIUS, LIVING_FIELD, ALIVE } from '@offgrid/design';

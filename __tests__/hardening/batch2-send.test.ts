@@ -128,7 +128,7 @@ describe('batch2 send — new chat, long message, interrupt/queue', () => {
     const { activeModelService } = require('../../src/services/activeModelService');
     await h.rtl.act(() => activeModelService.unloadTextModel(false));
 
-    await h.rtl.waitFor(() => expect(h.view!.getByText('No Model Selected')).toBeTruthy());
+    await h.rtl.waitFor(() => expect(h.view!.getByText('Needs a chat model.')).toBeTruthy());
     expect(h.view!.queryByTestId('chat-input')).toBeNull();
     // No starter prompts either: with no model they would only lead to the same dead end.
     expect(h.view!.queryByTestId('chat-starters')).toBeNull();

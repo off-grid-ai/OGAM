@@ -5,7 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Feather';
 import { TouchableOpacity } from '../../components/Touchable';
 import { AppSheet } from '../../components/AppSheet';
-import { CustomAlert, hideAlert, initialAlertState, type AlertState } from '../../components/CustomAlert';
+import { CustomAlert, hideAlert, initialAlertState, showAlert, type AlertState } from '../../components/CustomAlert';
 import { useTheme, useThemedStyles } from '../../theme';
 import { useAppStore } from '../../stores';
 import type { RootStackParamList } from '../../navigation/types';
@@ -14,6 +14,7 @@ import { useSlot, SLOTS } from '../../bootstrap/slotRegistry';
 import { createStyles, VIEWER_INK } from './styles';
 import { formatDate } from './useGalleryActions';
 import { askDeleteImage, saveImage } from './galleryMedia';
+import { shareMarkedImage } from '../../services/shareCard';
 
 type GalleryImageRoute = RouteProp<RootStackParamList, 'GalleryImage'>;
 
@@ -109,6 +110,22 @@ export const GalleryImageScreen: React.FC = () => {
                 iconColor={colors.text}
               />
             )}
+            <TouchableOpacity
+              style={styles.imageSheetAction}
+              // The image with the Off Grid AI mark under it, and the download link beside it. Over the open
+              // sheet, as Save: iOS presents the share sheet from it.
+              onPress={() => {
+                shareMarkedImage(image.imagePath).catch(() => {
+                  setAlertState(showAlert('Could not share', 'The image could not be shared. Save still works.'));
+                });
+              }}
+              accessibilityRole="button"
+              accessibilityLabel="Share"
+              testID="gallery-image-share"
+            >
+              <Icon name="share" size={22} color={colors.text} />
+              <Text style={styles.imageSheetActionText}>Share</Text>
+            </TouchableOpacity>
             <TouchableOpacity
               style={styles.imageSheetAction}
               // Over the open sheet: iOS presents the share sheet from it. Closing it first left nothing to

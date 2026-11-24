@@ -1,0 +1,46 @@
+Private AI on your iPhone. Make images and chat with AI, even with no signal, and nothing you type leaves your phone. The models run on the phone itself, so it works offline and in airplane mode.
+
+No account and no subscription. Download a model once and it is yours.
+
+MAKE IMAGES ON YOUR PHONE
+Type an idea and get a picture, drawn on your iPhone with Stable Diffusion models, not on a server. Off Grid AI writes the fuller prompt for you, and a live preview shows the picture while it renders. Make as many as you like.
+
+CHAT, WRITE AND ASK
+Chat and write with open models such as Qwen, Gemma, Llama and Phi. Ask about your documents, point your camera at a receipt, and talk instead of typing.
+
+VIDEO FROM ONE SENTENCE (PRO)
+Write "a red fox trotting through fresh snow" and Video Studio makes the clip. It runs on your iPhone, on your computer, or on your phone using your computer. Continue the shot, start a new one, or join shots into a story. To animate a photo, use the video models on your computer. Your photos stay on your own devices.
+
+POINT YOUR CAMERA AND ASK
+Photograph a receipt, a page or a sign. Ask "What's the total?" and get "$18.90, including $1.40 in tax."
+
+ASK ABOUT YOUR WORK
+Put your documents in a Project and ask. "What did I promise Sam?" gets the three things you promised, and the answer names the files it came from.
+
+TALK INSTEAD OF TYPING
+Record a voice note and get the words back as text, transcribed on your phone. With Pro, talk hands-free and it answers out loud.
+
+IT USES TOOLS
+It can use a calculator, check the date, search your Projects, and search the web or read a page when you are online. Web search is the one tool that goes online, and you can turn it off.
+
+A MODEL PICKED FOR YOUR PHONE
+Off Grid AI checks your phone's memory and picks a Fast, a Balanced and a Best model for it. One tap downloads a model and switches to it. Choose from open models such as Qwen, Gemma, Llama and Phi, or search Hugging Face for more.
+
+YOUR COMPUTER'S BIGGER MODELS, FREE
+Off Grid AI also runs on Mac, Windows and Linux. On the same Wi-Fi, your phone can use the larger models on your computer, for chat, images and video, at no cost. You can also connect to your own server.
+
+WHAT STAYS ON YOUR PHONE
+Your prompts, chats, documents, photos, voice notes and videos. The model runs in your phone's memory, so what you type is not sent to us or anyone else. The code is public on GitHub, so you can check.
+
+OFF GRID AI PRO
+Pro is an optional purchase inside the app. It adds:
+- Video Studio: short clips and stories from a sentence
+- Hands-free voice: talk, and it answers out loud
+- Drafts you approve: it writes the message, and nothing goes out without your OK
+- Sync with Mac, Windows and Linux: chats, files and your clipboard follow you, encrypted, over your own Wi-Fi
+- One Pro for up to 5 devices, phones and computers together
+
+Works on iPhone 12 or newer with iOS 17 or later. Video needs more memory, and the app shows which video models fit your iPhone.
+
+Privacy policy: https://getoffgridai.co/privacy/
+Terms of use: https://getoffgridai.co/terms/

@@ -15,7 +15,8 @@ import type { ToolResult } from './tools/types';
 import { providerRegistry } from './providers';
 import { contextCompactionService } from './contextCompaction';
 import logger from '../utils/logger';
-import { maybeScheduleSharePrompt } from '../utils/sharePrompt';
+import { isNetworkFailure } from '../utils/networkFailure';
+import { maybeScheduleSharePrompt, noteTurnNotGood } from '../utils/sharePrompt';
 import { checkProPromptForText } from './proPrompt';
 import { generationStarted, type GenerationMetrics, type Outcome } from './analytics/analytics';
 import { textModelFacts } from './analytics/modelFacts';
@@ -44,6 +45,10 @@ import {
 
 const SHARE_PROMPT_DELAY_MS = 1500;
 type StreamChunk = string | { content?: string; reasoningContent?: string };
+/** Tries of the same remote server after a dropped connection, before any other model. */
+const NETWORK_RETRIES = 2;
+const NETWORK_RETRY_MS = 1000;
+
 type FallbackRoute =
   | { kind: 'remote'; serverId: string; id: string; name: string }
   | { kind: 'local'; id: string; name: string };
@@ -63,6 +68,8 @@ export interface QueuedMessage {
   now?: boolean;
   /** The chat's picture and clip styles when it was sent, so a style change while it waits cannot change it. */
   styleIds?: MediaStyleIds;
+  /** Sent while the first chat model was still downloading: it goes once a chat model is chosen. */
+  waitsForModel?: boolean;
 }
 
 /**
@@ -200,10 +207,12 @@ class GenerationService {
     this.notifyListeners();
   }
 
-  private checkSharePrompt(delayMs = SHARE_PROMPT_DELAY_MS): void {
+  /** `good`: the reply finished on its own. A stopped one counts for Pro, never toward the rating ask. */
+  private checkSharePrompt(delayMs = SHARE_PROMPT_DELAY_MS, good = true): void {
     const s = useAppStore.getState();
-    const count = s.incrementTextGenerationCount();
-    maybeScheduleSharePrompt({ variant: 'text', count, hasEngaged: s.hasEngagedSharePrompt, delayMs });
+    s.incrementTextGenerationCount();
+    if (good) maybeScheduleSharePrompt({ variant: 'text', hasEngaged: s.hasEngagedSharePrompt, delayMs });
+    else noteTurnNotGood();
     checkProPromptForText(delayMs);
   }
 
@@ -329,8 +338,12 @@ class GenerationService {
     let failedName = routes[0].name;
     let lastError: unknown;
     let prepared = false;
+    // A server the network could not reach, after its retries: its other models would fail the same
+    // way, and trying them would replace the model the person chose.
+    const unreachable = new Set<string>();
     for (let index = 0; index < routes.length; index += 1) {
       const route = routes[index];
+      if (route.kind === 'remote' && unreachable.has(route.serverId)) continue;
       if (index > 0) {
         try {
           if (route.kind === 'remote') {
@@ -350,15 +363,7 @@ class GenerationService {
           continue;
         }
         if (this.abortRequested) return;
-        if (this.state.isGenerating) {
-          this.forceFlushTokens();
-          useChatStore.getState().resetStreamingSegment();
-          this.updateState({ streamingContent: '', isThinking: true, startTime: Date.now() });
-        }
-        this.tokenBuffer = '';
-        this.reasoningBuffer = '';
-        this.totalReasoningLength = 0;
-        this.remoteTimeToFirstToken = undefined;
+        this.clearAttemptStream();
         useChatStore.getState().addMessage(conversationId, {
           role: 'tool',
           toolName: 'model_fallback',
@@ -367,9 +372,13 @@ class GenerationService {
         prepared = this.state.isGenerating;
       }
       try {
-        return await run(route, prepared);
+        // A dropped connection is often a short hiccup: try the same server again before anything else.
+        return await this.withNetworkRetries(route, () => run(route, prepared), canRetry, () => {
+          prepared = this.state.isGenerating;
+        });
       } catch (error) {
         if (this.abortRequested) return;
+        if (route.kind === 'remote' && isNetworkFailure(error)) unreachable.add(route.serverId);
         if (contextCompactionService.isContextFullError(error)) {
           endAttemptForRetry(this, conversationId);
           throw error;
@@ -384,6 +393,45 @@ class GenerationService {
     }
     if (this.state.isGenerating) keepShownPartialOnError(this, conversationId);
     throw lastError;
+  }
+
+  /** Runs one route; a remote route the network could not reach before its reply began is tried again,
+   *  up to NETWORK_RETRIES. */
+  private async withNetworkRetries<T>(
+    route: FallbackRoute,
+    attempt: () => Promise<T>,
+    canRetry: () => boolean,
+    onRetry: () => void,
+  ): Promise<T | void> {
+    for (let retry = 0; ; retry += 1) {
+      try {
+        return await attempt();
+      } catch (error) {
+        // Only before the reply began: words already shown stay, as they always did.
+        const nothingShown = !this.state.streamingContent && !this.tokenBuffer && !this.reasoningBuffer;
+        const retryable =
+          route.kind === 'remote' && isNetworkFailure(error) && nothingShown && retry < NETWORK_RETRIES && canRetry();
+        if (this.abortRequested || !retryable) throw error;
+        logger.warn(`[GenerationService] ${route.name} unreachable, trying again (${retry + 1}/${NETWORK_RETRIES})`);
+        await new Promise(resolve => setTimeout(resolve, NETWORK_RETRY_MS * (retry + 1)));
+        if (this.abortRequested) return;
+        this.clearAttemptStream();
+        onRetry();
+      }
+    }
+  }
+
+  /** Drops what a failed attempt streamed, so the next attempt starts on a clean reply. */
+  private clearAttemptStream(): void {
+    if (this.state.isGenerating) {
+      this.forceFlushTokens();
+      useChatStore.getState().resetStreamingSegment();
+      this.updateState({ streamingContent: '', isThinking: true, startTime: Date.now() });
+    }
+    this.tokenBuffer = '';
+    this.reasoningBuffer = '';
+    this.totalReasoningLength = 0;
+    this.remoteTimeToFirstToken = undefined;
   }
 
   /** Generate a response with tool calling support (LLM → tools → repeat, max 5 iterations). */
@@ -553,7 +601,8 @@ class GenerationService {
     // Keep whatever is shown (based on the store, not this.state.streamingContent which LiteRT may not fill).
     const hadShownPartial = !!useChatStore.getState().streamingMessage.trim();
     this.keepShownPartialOrClear(generationTime);
-    if (hadShownPartial) this.checkSharePrompt();
+    if (hadShownPartial) this.checkSharePrompt(SHARE_PROMPT_DELAY_MS, false);
+    else noteTurnNotGood();
 
     this.resetState('stop');
 
@@ -664,6 +713,11 @@ class GenerationService {
       logger.log(`[QUEUE-SM] held (${this.state.queueHold}) with ${queue.length} queued`);
       return;
     }
+    // A message sent while the first chat model downloads waits for it: sent before, it would find no model.
+    if (queue.some(entry => entry.waitsForModel) && useAppStore.getState().activeModelId === null) {
+      logger.log('[QUEUE-SM] waiting for the chat model to arrive');
+      return;
+    }
     const { batch: all, rest } = takeNextQueuedTurn(queue);
     // A send-now message is the user's answer to the Stop it caused: the rest wait behind its reply, not paused.
     const queueHold = all[0]?.now ? chatQueueHoldAfter('resume') : this.state.queueHold;
@@ -713,6 +767,8 @@ class GenerationService {
   /** `signal`: how the reply ended. A Stop or a failure holds the queue for the user. */
   private resetState(signal: ChatQueueSignal = 'done'): void {
     this.recordAnalyticsEnd(signal);
+    // A failed turn: the rating ask never follows it.
+    if (signal === 'error') noteTurnNotGood();
     this.state = { ...this.state, queueHold: chatQueueHoldAfter(signal) };
     const hasQueuedItems = this.state.queuedMessages.length > 0;
     if (this.flushTimer) {

@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, Linking, Image } from 'react-native';
+import { View, Text, Image } from 'react-native';
 import { TouchableOpacity } from '../Touchable';
 import Icon from 'react-native-vector-icons/Feather';
 import { AnimatedEntry } from '../AnimatedEntry';
@@ -12,9 +12,8 @@ import type { ThemeColors, ThemeShadows } from '../../theme';
 import {
   SPACING,
   TYPOGRAPHY,
-  OFF_GRID_DESKTOP_URL,
 } from '../../constants';
-import { withUtm } from '../../utils/utm';
+import { useOtherProduct } from '../../hooks/useOtherProduct';
 import { getPricingCopy } from '../../utils/proPricing';
 
 interface Props {
@@ -40,6 +39,8 @@ export const ProUpsellBanner: React.FC<Props> = ({ trigger, onGetPro }) => {
   );
   const dismiss = useAppStore((s) => s.setProBannerDismissed);
   const pricing = getPricingCopy();
+  // Get the desktop app, or Open it when one is already paired (the shared rule).
+  const desktop = useOtherProduct('pro-upsell')('desktop');
 
   if (!show) return null;
 
@@ -71,16 +72,16 @@ export const ProUpsellBanner: React.FC<Props> = ({ trigger, onGetPro }) => {
           </TouchableOpacity>
         </View>
 
-        <Button title={pricing.cta} variant="primary" size="small" onPress={onGetPro} style={styles.cta} />
+        <Button title={pricing.cta} variant="hero" size="small" onPress={onGetPro} style={styles.cta} />
 
         <AnimatedPressable
           style={[styles.linkRow, styles.desktopLink]}
-          onPress={() => Linking.openURL(withUtm(OFF_GRID_DESKTOP_URL, 'pro-upsell')).catch(() => {})}
-          accessibilityRole="link"
-          accessibilityLabel="Get Off Grid AI Desktop on the website"
+          onPress={desktop.onPress}
+          accessibilityRole={desktop.external ? 'link' : 'button'}
+          accessibilityLabel={desktop.label}
         >
-          <Text style={styles.linkText}>Get Off Grid AI Desktop</Text>
-          <Icon name="external-link" size={16} color={colors.primary} />
+          <Text style={styles.linkText}>{desktop.label}</Text>
+          <Icon name={desktop.icon} size={16} color={colors.primary} />
         </AnimatedPressable>
       </View>
     </AnimatedEntry>

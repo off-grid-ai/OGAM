@@ -82,7 +82,7 @@ export const SharePromptSheet: React.FC<SharePromptSheetProps> = ({ visible, onC
 
         <Button
           title="Rate Off Grid AI"
-          variant="primary"
+          variant="hero"
           onPress={() => close('rate')}
           style={styles.rateButton}
           testID="share-prompt-rate"

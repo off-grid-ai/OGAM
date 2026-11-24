@@ -131,7 +131,7 @@ describe('vision projector that fails to start', () => {
     fireEvent.press(ui.getByTestId('attach-button'));
     fireEvent.press(await waitFor(() => ui.getByTestId('attach-photo'), RENDER_WAIT));
     await waitFor(() => expect(ui.getByText('Vision File Missing')).toBeTruthy(), RENDER_WAIT);
-    expect(ui.queryByText('Vision Not Supported')).toBeNull();
+    expect(ui.queryByText('Needs a model that can see pictures.')).toBeNull();
     fireEvent.press(ui.getByText('Open Downloads'));
 
     // AFTER: Downloads shows it as a vision model, with the repair wrench.

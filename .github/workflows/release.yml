@@ -19,6 +19,8 @@ jobs:
     env:
       ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
       PLAY_STORE_JSON_KEY: ${{ secrets.PLAY_STORE_JSON_KEY }}
+      # Three native compiles at a time, as uat-dev.yml: ninja's six ran the runner out of memory.
+      OFFGRID_NATIVE_JOBS: '3'
 
     steps:
       - name: Checkout code
@@ -90,7 +92,12 @@ jobs:
           fi
 
           # Write release notes
-          echo "## What's Changed" > release-notes.md
+          echo "## Which APK" > release-notes.md
+          echo "" >> release-notes.md
+          echo "- **OffgridMobile-v${{ env.NEW_VERSION }}.apk**: small. Downloads the chat model the first time you open it." >> release-notes.md
+          echo "- **OffgridMobile-v${{ env.NEW_VERSION }}-with-model.apk**: about 1.5 GB more, with the chat model inside. Chats with no network at all." >> release-notes.md
+          echo "" >> release-notes.md
+          echo "## What's Changed" >> release-notes.md
           echo "" >> release-notes.md
           echo "$COMMITS" >> release-notes.md
           echo "" >> release-notes.md
@@ -122,11 +129,13 @@ jobs:
         run: |
           cd android
           ./gradlew assembleRelease
-
-      - name: Rename APK
-        run: |
-          mv android/app/build/outputs/apk/release/app-release.apk \
-             android/app/build/outputs/apk/release/OffgridMobile-v${{ env.NEW_VERSION }}.apk
+          mv app/build/outputs/apk/release/app-release.apk \
+             app/build/outputs/apk/release/OffgridMobile-v${{ env.NEW_VERSION }}.apk
+          # The same app with the chat model inside (about 1.5 GB more): it chats with no network at all.
+          # The plain APK fetches the same model at first open.
+          ./gradlew assembleRelease -PmodelInApk
+          mv app/build/outputs/apk/release/app-release.apk \
+             app/build/outputs/apk/release/OffgridMobile-v${{ env.NEW_VERSION }}-with-model.apk
 
       - name: Create GitHub Release
         env:
@@ -134,6 +143,7 @@ jobs:
         run: |
           gh release create v${{ env.NEW_VERSION }} \
             android/app/build/outputs/apk/release/OffgridMobile-v${{ env.NEW_VERSION }}.apk \
+            android/app/build/outputs/apk/release/OffgridMobile-v${{ env.NEW_VERSION }}-with-model.apk \
             --title "Off Grid v${{ env.NEW_VERSION }}" \
             --notes-file release-notes.md
 

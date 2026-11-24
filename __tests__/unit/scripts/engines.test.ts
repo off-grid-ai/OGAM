@@ -20,6 +20,7 @@ import {
   setGradlePin,
   specFor,
   summaryMarkdown,
+  llamaDriftLine,
   unfinishedRuns,
   unmetPeers,
   VIDEO_RUNTIME_CHECKS,
@@ -203,6 +204,22 @@ const executorchHeld = {
   next: 'Move react-native-worklets to >=0.10.0 in its own PR. The next daily run then moves it.',
   since: '2026-10-20T08:00:00.000Z',
 };
+
+describe('llamaDriftLine', () => {
+  it('puts desktop\'s llama.cpp pin beside the app\'s @ogai/llama.rn build', () => {
+    expect(llamaDriftLine('b12532', '0.13.0-b12500')).toBe(
+      'llama.cpp: desktop `b12532`, @ogai/llama.rn `0.13.0-b12500` (32 builds apart).',
+    );
+  });
+  it('flags a gap over 50 builds, whichever app lags', () => {
+    expect(llamaDriftLine('b12532', '0.13.0-b12415')).toContain('(117 builds apart). **Over 50 builds apart');
+    expect(llamaDriftLine('b12415', '0.13.0-b12532.1')).toContain('**Over 50 builds apart');
+    expect(llamaDriftLine('b12465', '0.13.0-b12415')).not.toContain('Over 50');
+  });
+  it('still prints both sides when one is unknown', () => {
+    expect(llamaDriftLine(null, '0.13.0-b12415')).toBe('llama.cpp: desktop `unknown`, @ogai/llama.rn `0.13.0-b12415`');
+  });
+});
 
 describe('summaryMarkdown', () => {
   it('lists what moved, and each held engine with its blocker, since when, and the next step', () => {

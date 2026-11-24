@@ -105,7 +105,7 @@ function renderRoute(name: 'RemoteServers' | 'Chat') {
 
 function openModelSelector(chat: ReturnType<typeof renderRoute>): void {
   fireEvent.press(
-    chat.queryByText('Select Model') ?? chat.getByTestId('model-selector'),
+    chat.queryByText('Choose model') ?? chat.getByTestId('model-selector'),
   );
 }
 
@@ -130,7 +130,7 @@ it('uses the existing Thinking toggle and budget for an OpenRouter chat', async 
     const chat = renderRoute('Chat');
     await waitFor(() =>
       expect(
-        chat.queryByText('Select Model') ?? chat.queryByTestId('model-selector'),
+        chat.queryByText('Choose model') ?? chat.queryByTestId('model-selector'),
       ).not.toBeNull(),
     );
     openModelSelector(chat);
@@ -169,7 +169,7 @@ it('explains and preserves reasoning for a model that reports it as mandatory', 
     const chat = renderRoute('Chat');
     await waitFor(() =>
       expect(
-        chat.queryByText('Select Model') ?? chat.queryByTestId('model-selector'),
+        chat.queryByText('Choose model') ?? chat.queryByTestId('model-selector'),
       ).not.toBeNull(),
     );
     openModelSelector(chat);

@@ -1,3 +1,6 @@
+import { modelReadiness } from '@offgrid/features';
+import { ReadinessCard } from '../../components/ReadinessLine';
+import { useReadinessAction } from '../../hooks/useReadinessAction';
 import { useSlot, SLOTS } from '../../bootstrap/slotRegistry';
 import React, { useMemo, useState } from 'react';
 import { useAppStore } from '../../stores/appStore';
@@ -34,6 +37,8 @@ export const GalleryScreen: React.FC = () => {
   const conversationId = route.params?.conversationId;
   const [kind, setKind] = useState<'images' | 'videos'>('images');
   const videos = useAppStore(state => state.generatedVideos);
+  const hasImageModel = useAppStore(state => state.downloadedImageModels.length > 0);
+  const runReadiness = useReadinessAction();
   // Video is Pro: making and tracking videos fills these slots. Watching saved videos stays free.
   const VideoStatus = useSlot(SLOTS.videoStatus);
   const VideoSection = useSlot(SLOTS.galleryVideoSection);
@@ -269,7 +274,7 @@ export const GalleryScreen: React.FC = () => {
                 accessibilityRole="button"
                 style={styles.videoRow}
               >
-                <Icon name="play-circle" size={24} color={colors.textSecondary} />
+                <Icon name="play-circle" size={24} color={colors.textSecondary} style={styles.videoRowIcon} />
                 <View style={styles.videoRowBody}>
                   <Text numberOfLines={2} style={styles.videoRowTitle}>
                     {item.prompt}
@@ -291,9 +296,14 @@ export const GalleryScreen: React.FC = () => {
               ? 'No images in this chat'
               : 'No generated images yet'}
           </Text>
-          <Text style={styles.emptyText}>
-            Generate images from any chat conversation.
-          </Text>
+          {hasImageModel ? (
+            <Text style={styles.emptyText}>
+              Generate images from any chat conversation.
+            </Text>
+          ) : (
+            // "Generate in a chat" cannot work yet: say what is missing, with the way to get it.
+            <ReadinessCard readiness={modelReadiness({ need: 'image', ready: false })} onAction={runReadiness} testID="gallery-readiness" />
+          )}
         </View>
       ) : (
         <FlatList

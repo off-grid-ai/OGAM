@@ -108,7 +108,7 @@ export const EngineUpdatesScreen: React.FC = () => {
                 <Text style={styles.settingHint} testID="engine-last-check">{lastChecked(info.lastCheck)}</Text>
                 <Button
                   title={checking ? 'Checking...' : 'Check now'}
-                  variant="primary"
+                  variant="hero"
                   size="medium"
                   onPress={checkNow}
                   disabled={checking || !enabled}

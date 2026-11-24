@@ -80,6 +80,8 @@ android {
     compileSdk rootProject.ext.compileSdkVersion
 
     namespace "ai.offgridmobile"
+    // The bundled chat model ships in the app bundle as two fast-follow AI packs (../bundled-model.gradle).
+    assetPacks = [":chat_model", ":chat_mmproj"]
     // java.time on API 24. minSdk is 24, but Instant/Duration and friends only exist from API 26, so the
     // Kotlin sync modules (screenshot watcher, directory source, downloads) would throw NoSuchMethodError on
     // Android 7 - a crash, not a lint nag. Desugaring backports them instead of us hand-rolling date
@@ -163,6 +165,39 @@ android {
     }
 }
 
+// The "with model" APK on GitHub releases: -PmodelInApk puts the bundled chat model's files inside the APK
+// under assets/<pack>/ (hard links to the packs' fetched files), so the app has it with no network at all.
+// BundledModelModule copies them out once and reports them as arrived packs. Without the flag (Play's
+// bundle, the plain APK) nothing changes.
+if (project.hasProperty("modelInApk")) {
+    def modelAssets = layout.buildDirectory.dir("model-in-apk/assets")
+    def packs = ["chat_model", "chat_mmproj"]
+    def linkModelIntoApk = tasks.register("linkModelIntoApk") {
+        dependsOn(packs.collect { ":${it}:fetchBundledModel" })
+        outputs.dir(modelAssets)
+        doLast {
+            packs.each { pack ->
+                def out = new File(modelAssets.get().asFile, pack)
+                out.mkdirs()
+                file("${rootDir}/${pack}/src/main/assets").eachFile { src ->
+                    def dest = new File(out, src.name)
+                    if (dest.exists() && dest.length() == src.length()) return
+                    dest.delete()
+                    try {
+                        java.nio.file.Files.createLink(dest.toPath(), src.toPath())
+                    } catch (Exception ignored) {
+                        java.nio.file.Files.copy(src.toPath(), dest.toPath())
+                    }
+                }
+            }
+        }
+    }
+    android.sourceSets.main.assets.srcDir(modelAssets)
+    tasks.matching { it.name.startsWith("merge") && it.name.endsWith("Assets") }.configureEach {
+        dependsOn(linkModelIntoApk)
+    }
+}
+
 configurations.all {
     exclude group: 'com.android.support'
 }
@@ -179,6 +214,9 @@ dependencies {
     } else {
         implementation jscFlavor
     }
+
+    // Play AI packs: the state and location of the bundled chat model's packs (bundledmodel/).
+    implementation("com.google.android.play:ai-delivery:0.2.0-beta01")
 
     // Coroutines for async operations (used by LocalDreamModule)
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")

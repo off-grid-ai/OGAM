@@ -1,4 +1,5 @@
 import { videoModelDisplayName } from '../../utils/modelHelpers';
+import { useOpenScribe } from '../../hooks/useOpenScribe';
 import { useAppStore } from '../../stores/appStore';
 import React, { useCallback, useEffect } from 'react';
 import { View, Text, Image, Linking } from 'react-native';
@@ -30,6 +31,7 @@ import { useHomeScreen, HomeScreenNavigationProp } from './hooks/useHomeScreen';
 import { RecentConversations } from './components/RecentConversations';
 import { LoadingOverlay } from './components/LoadingOverlay';
 import { DesktopPromoCard } from './components/DesktopPromoCard';
+import { HomePicks } from './components/HomePicks';
 import { FeatureShowcase, showcaseFeatures } from './components/FeatureShowcase';
 import { useIsProActive } from '../../hooks/useIsProActive';
 import { useOpenProTools } from '../../hooks/useOpenProTools';
@@ -135,6 +137,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
     handleUnloadImageModel,
     // Remote model handlers
     handleEjectAll,
+    canStartChat,
     startNewChat,
     continueChat,
     handleDeleteConversation,
@@ -188,6 +191,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
   // The offer is one of Home's cards: counted shown with Home, like the Models card with Models.
   // Counted from a small child that reads focus, so a tab switch does not re-render all of Home.
   // The top of Home: everything it does, free and Pro, what this person has not tried first.
+  const openScribe = useOpenScribe();
   const openBoost = useOpenBoost('home', useCallback(
     () => setAlertState(showAlert("You're offline", 'Connect to the internet to see the offer.')),
     [setAlertState],
@@ -201,15 +205,17 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
       showBoost: homeBoostShown,
     },
     {
-      image: () => (downloadedImageModels.length > 0 ? startNewChat() : presentModelSheet('image')),
-      video: () => ((modelCounts.video ?? 0) > 0 ? startNewChat() : presentModelSheet('video')),
+      // A picture or a clip: the chat opens in that mode (it picks the model), as the guide does. A plain
+      // New chat did nothing once the models were ejected, and opened a text chat when it worked.
+      image: () => (downloadedImageModels.length > 0 ? navigation.navigate('Chat', { mode: 'image' }) : presentModelSheet('image')),
+      video: () => ((modelCounts.video ?? 0) > 0 ? navigation.navigate('Chat', { mode: 'video' }) : presentModelSheet('video')),
       voice: () => presentModelSheet('voice'),
       speech: () => presentModelSheet('speech'),
       documents: () => navigation.navigate('Main', { screen: 'ProjectsTab' }),
       sync: openSync,
       tools: openProTools,
       notes: () => navigation.navigate('Notes' as never),
-      improve: () => navigation.navigate('Notes' as never),
+      improve: openScribe,
       vault: () => navigation.navigate('Vault' as never),
       pro: () => getPro('home-showcase'),
       explain: topicId => navigation.navigate('GuideTopic', { id: topicId }),
@@ -317,12 +323,13 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
               <Text style={styles.subtitle} textBreakStrategy="balanced">
                 Your chats and files never leave your device.
               </Text>
-              {activeTextModelId || activeImageModelId || remoteLabels.video || videoLabel ? (
+              {/* The first chat model on its way counts: its chat opens now and answers when it arrives. */}
+              {canStartChat ? (
                 <Button
                   title="New chat"
                   variant="hero"
                   size="small"
-                  icon={<Icon name="plus" size={16} color={colors.onHero} />}
+                  icon={<Icon name="plus" size={16} color={colors.primary} />}
                   onPress={startNewChat}
                   style={styles.newChatButton}
                   testID="new-chat-button"
@@ -331,11 +338,15 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
             </View>
           </View>
 
-          {/* Still while a sheet covers Home: nothing moves where you cannot see it (hand test 89). */}
+          {/* What you can do always leads Home (Mac, 2026-11-18). Still while a sheet covers Home:
+              nothing moves where you cannot see it (hand test 89). */}
           <FeatureShowcase
             features={showcase}
             active={pickerType === null && !modelsManagerOpen && !whisperOpen && !voiceOpen}
           />
+
+          {/* What you picked in onboarding comes next, one tap from each. */}
+          <HomePicks />
 
           {/* Collapsed Models summary — tap to open the manager sheet. Both the
               text (1) and image (13) tour steps anchor here now. */}

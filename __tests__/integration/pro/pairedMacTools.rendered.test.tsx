@@ -45,6 +45,8 @@ describe('paired Mac tools in Pro settings', () => {
 
   it('shows one Mac card when its MCP server already lists both task tools', async () => {
     useSyncStore.getState().setKnownDevices([pairedMac]);
+    // Sync lists the Mac as connected: an offline computer shows Offline, not a tool count.
+    useSyncStore.getState().setConnectedDeviceIds([macId]);
     const mcp = useMcpStore.getState();
     mcp.addServer({ id: httpId, name: 'Mac tools', url: 'http://mac.local/mcp', grantedByDeviceId: macId });
     mcp.setConnectionState(httpId, 'connected');
@@ -79,6 +81,8 @@ describe('paired Mac tools in Pro settings', () => {
 
   it('keeps a connecting MCP route behind the active Desktop card', () => {
     useSyncStore.getState().setKnownDevices([pairedMac]);
+    // Sync lists the Mac as connected: an offline computer shows Offline, not a tool count.
+    useSyncStore.getState().setConnectedDeviceIds([macId]);
     const mcp = useMcpStore.getState();
     mcp.addServer({ id: httpId, name: 'Mac tools', url: 'http://mac.local/mcp', grantedByDeviceId: macId });
     mcp.setConnectionState(httpId, 'connecting');

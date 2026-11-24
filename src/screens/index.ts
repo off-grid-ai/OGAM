@@ -31,4 +31,5 @@ export { AboutScreen } from './AboutScreen';
 export { GuideScreen } from './GuideScreen';
 export { GuideTopicScreen } from './GuideScreen/GuideTopicScreen';
 export { AnalyticsInfoScreen } from './AnalyticsInfoScreen';
+export { LanguageScreen } from './LanguageScreen';
 export { ToolsScreen } from './ToolsScreen';

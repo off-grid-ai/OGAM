@@ -158,12 +158,16 @@ describe('synced Web Use and Computer Use task in chat', () => {
     expect(screen.queryByText('Approve')).toBeNull();
     expect(screen.queryByText('Decline')).toBeNull();
 
+    // Offline, the line is a way to Sync, and a control could not arrive, so none is sent.
+    const connectedIds = useSyncStore.getState().connectedDeviceIds;
     act(() => useSyncStore.getState().setConnectedDeviceIds([]));
     expect(
-      screen.getByText(
-        'Office Mac is offline. Progress and controls resume when it reconnects.',
-      ),
+      screen.getByText('Office Mac is offline. Open Sync to reconnect.'),
     ).toBeTruthy();
+    expect(screen.getByTestId('task-offline-open-sync')).toBeTruthy();
+    fireEvent.press(screen.getByTestId('task-control-pause'));
+    expect(screen.queryByText('Pause requested')).toBeNull();
+    act(() => useSyncStore.getState().setConnectedDeviceIds(connectedIds));
 
     fireEvent.press(screen.getByTestId('task-control-pause'));
     await waitFor(() =>

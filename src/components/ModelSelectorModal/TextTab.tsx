@@ -209,7 +209,8 @@ export const TextTab: React.FC<TextTabProps> = ({
           <ListGroup>
           {downloadedModels.map(model => {
             const fileSize = (model.fileSize || 0) + ('mmProjFileSize' in model ? (model.mmProjFileSize || 0) : 0);
-            const memoryFits = !fileExceedsBudget(fileSize, hardwareService.getTotalMemoryGB(), textModelBudget());
+            const ramGB = hardwareService.getTotalMemoryGB();
+            const memoryFits = !fileExceedsBudget(fileSize, ramGB, textModelBudget(ramGB));
             const row = textRowState({
               modelPath: model.filePath,
               modelId: model.id,

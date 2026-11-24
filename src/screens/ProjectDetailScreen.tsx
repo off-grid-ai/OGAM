@@ -1,3 +1,6 @@
+import { modelReadiness } from '@offgrid/features';
+import { ReadinessLine } from '../components/ReadinessLine';
+import { useReadinessAction } from '../hooks/useReadinessAction';
 import { deleteChatImages, imagesNotDeletedAlert } from '../services/chatImageCleanup';
 import React, { useMemo, useState } from 'react';
 import { View, Text, FlatList } from 'react-native';
@@ -6,7 +9,7 @@ import { LIST_CLIPPING_PROPS } from '../constants/listClipping';
 import { AliveScreen } from '../components/AliveScreen';
 import { useNavigation, useRoute, RouteProp, useIsFocused } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import Swipeable from 'react-native-gesture-handler/Swipeable';
+import { SwipeToDelete } from '../components/SwipeToDelete';
 import Icon from 'react-native-vector-icons/Feather';
 import { Button } from '../components/Button';
 import {
@@ -69,6 +72,8 @@ export const ProjectDetailScreen: React.FC = () => {
     navigation.navigate('Chat', { conversationId: conversation.id });
   };
 
+  const runReadiness = useReadinessAction();
+
   const handleNewChat = () => {
     if (hasVideoModel && downloadedModels.length === 0) {
       navigation.navigate('Chat', { projectId });
@@ -117,26 +122,11 @@ export const ProjectDetailScreen: React.FC = () => {
 
   const formatDate = (dateString: string): string => formatWhen(dateString);
 
-  const renderChatRightActions = (conversation: Conversation) => (
-    <TouchableOpacity
-      style={styles.deleteAction}
-      accessibilityRole="button"
-      accessibilityLabel={`Delete ${conversation.title}`}
-      onPress={() => handleDeleteChat(conversation)}
-    >
-      <Icon name="trash-2" size={16} color={colors.error} />
-    </TouchableOpacity>
-  );
-
   const renderChat = ({ item }: { item: Conversation }) => {
     const preview = previewLine(item.messages);
 
     return (
-      <Swipeable
-        renderRightActions={() => renderChatRightActions(item)}
-        overshootRight={false}
-        containerStyle={styles.swipeableContainer}
-      >
+      <SwipeToDelete onDelete={() => handleDeleteChat(item)} label={item.title}>
         <TouchableOpacity
           style={styles.chatItem}
           onPress={() => handleChatPress(item)}
@@ -156,7 +146,7 @@ export const ProjectDetailScreen: React.FC = () => {
             </Text>
           </View>
         </TouchableOpacity>
-      </Swipeable>
+      </SwipeToDelete>
     );
   };
 
@@ -215,7 +205,7 @@ export const ProjectDetailScreen: React.FC = () => {
             title="New chat"
             variant="hero"
             size="small"
-            icon={<Icon name="plus" size={16} color={colors.onHero} />}
+            icon={<Icon name="plus" size={16} color={colors.primary} />}
             onPress={handleNewChat}
             style={styles.newChatButton}
             testID="project-new-chat"
@@ -266,7 +256,11 @@ export const ProjectDetailScreen: React.FC = () => {
       <SectionLabel title={`Chats · ${projectChats.length}`} style={styles.chatsLabel} testID="project-chats-count" />
       {projectChats.length === 0 ? (
         // Under its label, right below the card: centred in the page it floated 330 pt away (hand test 74).
-        <Text style={styles.emptyChatsText}>Start a chat. It follows this project's instructions.</Text>
+        hasModels ? (
+          <Text style={styles.emptyChatsText}>Start a chat. It follows this project's instructions.</Text>
+        ) : (
+          <ReadinessLine readiness={modelReadiness({ need: 'chat', ready: false })} onAction={runReadiness} style={styles.readinessLine} testID="project-readiness" />
+        )
       ) : (
         <>
           <FlatList

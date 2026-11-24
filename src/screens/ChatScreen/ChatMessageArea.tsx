@@ -1,3 +1,4 @@
+import { useTextModelReadiness } from '../../hooks/useTextModelReadiness';
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import {
   View,
@@ -24,7 +25,9 @@ import { AnimatedPressable } from '../../components/AnimatedPressable';
 import { generationService } from '../../services';
 import type { QueueActions } from '../../components/ChatInput/Toolbar';
 import { RestyleSheet } from '../../components/MediaStyles/RestyleSheet';
-import { EmptyChat, ImageProgressIndicator } from './ChatScreenComponents';
+import { EmptyChat, ImageProgressIndicator, starterMode } from './ChatScreenComponents';
+import { retryArrivingChatModel } from '../../services/arrivingChatModel';
+import type { ImageModeState } from '../../types';
 import { getPlaceholderText, useChatScreen } from './useChatScreen';
 import { createStyles } from './styles';
 import { useTheme } from '../../theme';
@@ -200,6 +203,8 @@ export const ChatMessageArea: React.FC<ChatMessageAreaProps> = ({
   renderItem,
 }) => {
   const hasScrolledRef = React.useRef(false);
+  // What the composer is making: an empty chat suggests pictures or clips to match.
+  const [composerMode, setComposerMode] = useState<ImageModeState>('auto');
   // A chat opens at its newest message. The list renders in batches, so one scroll on the first
   // layout lands at the end of the first batch only; until you touch the list, every growth pins
   // it to the end again (hand test 51: a long chat opened from Home sat at its oldest message).
@@ -222,6 +227,11 @@ export const ChatMessageArea: React.FC<ChatMessageAreaProps> = ({
   }, [chat.activeConversationId]);
   const interfaceMode = useUiModeStore(s => s.interfaceMode);
   const tabNav = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  // The chat cannot answer: no model, or the computer it ran on is asleep. Said above the field.
+  const textReadiness = useTextModelReadiness();
+  const composerDisabled = !chat.hasActiveModel && !chat.arrivingTextModel;
+  const showTextReadiness =
+    !textReadiness.readiness.ready && (composerDisabled || textReadiness.offline);
   const getPro = useGetPro();
   const toolCountHintDismissed = useAppStore(state => state.toolCountHintDismissed);
   // Subscribe to Pro activation so this re-renders the moment a license is
@@ -238,6 +248,9 @@ export const ChatMessageArea: React.FC<ChatMessageAreaProps> = ({
     onRemove: id => generationService.removeFromQueue(id),
     onResume: () => generationService.resumeQueue(),
     onClear: () => generationService.clearQueue(),
+    onRetryModel: () => {
+      if (chat.arrivingTextModel) retryArrivingChatModel(chat.arrivingTextModel).catch(() => undefined);
+    },
   };
   const assistantAvailability = useAssistantToolAvailability();
   // extToolCount is the live MCP tool count (the email/calendar extension reports 0
@@ -249,7 +262,7 @@ export const ChatMessageArea: React.FC<ChatMessageAreaProps> = ({
   // how many of them are on and fold MCP in — this is the "Pro Tools" badge.
   const searchableKnowledge = useHasSearchableKnowledge(chat.activeConversation);
   const proToolIds = getToolExtensions().flatMap(e =>
-    (e.getToolDefinitions?.() ?? []).map(t => t.id),
+    (e.getToolDefinitions?.() ?? []).map(tool => tool.id),
   );
   const proToolsActiveCount = proToolIds.filter(id =>
     chat.enabledTools.includes(id),
@@ -258,7 +271,7 @@ export const ChatMessageArea: React.FC<ChatMessageAreaProps> = ({
   // The free Tools page lists only the tools offered now, so its badge counts just those
   // (pro email/calendar ids are surfaced under Pro Tools instead, not double-counted; the video
   // tool counts only while Pro video is on).
-  const freeToolIds = new Set(offeredTools().map(t => t.id));
+  const freeToolIds = new Set(offeredTools().map(tool => tool.id));
   // The same rule the turn sends by: knowledge search counts only when there is something to search.
   const freeToolsCount = toolsForTurn(chat.enabledTools, searchableKnowledge).filter(id =>
     freeToolIds.has(id),
@@ -347,8 +360,18 @@ export const ChatMessageArea: React.FC<ChatMessageAreaProps> = ({
               activeProject={chat.activeProject}
               setShowProjectSelector={chat.setShowProjectSelector}
               isRemote={chat.activeModelInfo?.isRemote}
-              // Starters are text prompts, so they need a text model: with only an image model a tap drew a picture.
-              onStarter={chat.hasTextModel && !chat.isModelLoading ? prompt => chat.handleSend(prompt) : undefined}
+              arriving={chat.arrivingTextModel}
+              onRetryArriving={queueActions.onRetryModel}
+              mode={starterMode(composerMode)}
+              // Text starters need a text model: with only an image model a tap drew a picture. Picture and clip
+              // starters show only once the composer turned that mode on, which checked its model.
+              onStarter={
+                composerMode === 'force' || composerMode === 'video'
+                  ? prompt => chat.handleSend(prompt, undefined, composerMode)
+                  : (chat.hasTextModel || chat.arrivingTextModel) && !chat.isModelLoading
+                    ? prompt => chat.handleSend(prompt)
+                    : undefined
+              }
             />
           );
         })()
@@ -529,11 +552,13 @@ export const ChatMessageArea: React.FC<ChatMessageAreaProps> = ({
           onSend={(prompt, kind) => chat.handleSend(prompt, undefined, kind === 'video' ? 'video' : 'force')}
         />
         <ChatInput
+          startMode={chat.startMode}
+          onImageModeChange={setComposerMode}
           assistantSelected={assistantSelected}
           onAssistantSelectedChange={onAssistantSelectedChange}
           onSend={chat.handleSend}
           onStop={chat.handleStop}
-          disabled={!chat.hasActiveModel}
+          disabled={!chat.hasActiveModel && !chat.arrivingTextModel}
           isGenerating={
             chat.isGeneratingForThisConversation || chat.isStreaming || chat.isThinking
           }
@@ -546,7 +571,7 @@ export const ChatMessageArea: React.FC<ChatMessageAreaProps> = ({
           queue={chat.queue}
           queueActions={queueActions}
           placeholder={getPlaceholderText({
-            hasModel: chat.hasActiveModel,
+            hasModel: chat.hasActiveModel || !!chat.arrivingTextModel,
             isModelLoading: chat.isModelLoading,
             supportsVision: chat.supportsVision,
             imageOnly: chat.imageModelLoaded && !chat.hasTextModel,
@@ -572,6 +597,9 @@ export const ChatMessageArea: React.FC<ChatMessageAreaProps> = ({
             getPro('chat-assistant');
           }}
           onAssistantSetupSync={() => tabNav.navigate('Sync')}
+          readiness={showTextReadiness ? textReadiness.readiness : undefined}
+          onReadinessRetry={textReadiness.retry}
+          onChooseModel={() => chat.setShowModelSelector(true)}
           onFindComputer={() => tabNav.navigate('RemoteServers')}
           onGetVideoModel={() => tabNav.navigate('Main', { screen: 'ModelsTab', params: { initialTab: 'video' } })}
           onVideoUpgrade={() => {

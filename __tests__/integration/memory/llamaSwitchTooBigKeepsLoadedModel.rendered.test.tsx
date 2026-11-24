@@ -103,5 +103,7 @@ describe('llama → llama switch to a model too big for the phone', () => {
     expect(initsFor('ggml-small.gguf')).toBe(1);
     expect(initsFor('huge.gguf')).toBe(0);
     expect(contextA.release).not.toHaveBeenCalled();
-  }, 45000);
+  // The first test in a CI shard transforms the whole app for coverage (about 37 s here with a
+  // cold cache), so it gets the same budget as the other cold rendered journeys.
+  }, 120_000);
 });

@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { FEATURE_NAMES } from '@offgrid/features';
 import { AppState, ScrollView, Text, View, useWindowDimensions } from 'react-native';
 import { useIsFocused } from '@react-navigation/native';
 import type { NativeScrollEvent, NativeSyntheticEvent } from 'react-native';
@@ -96,7 +97,7 @@ export function showcaseFeatures(use: FeatureUse, open: FeatureOpeners, isPro: b
     { key: 'improve', icon: 'edit-3', pro: true, tried: false, title: 'Clearer writing in any app.', line: 'Share your text to Off Grid AI. It comes back better.', onPress: open.improve },
     { key: 'vault', icon: 'lock', pro: true, tried: false, title: 'Your passwords, locked on this phone.', line: 'Open with your face or fingerprint.', onPress: open.vault },
     { key: 'mac-recall', icon: 'search', mac: true, pro: true, tried: false, title: 'Find anything that was on your screen.', line: 'Search what your computer saw, meetings too.', onPress: open.desktop },
-    { key: 'sync', icon: 'refresh-cw', pro: true, tried: false, title: 'Your chats, on every device.', line: 'Start on your computer, finish here.', onPress: open.sync },
+    { key: 'sync', icon: 'refresh-cw', pro: true, tried: false, title: FEATURE_NAMES.sync, line: 'Start on your computer, finish here.', onPress: open.sync },
     { key: 'mac-meetings', icon: 'users', mac: true, pro: true, tried: false, title: 'Meetings, written up for you.', line: 'With Off Grid AI on your Mac: recorded and written up there.', onPress: open.desktop },
     { key: 'mac-clipboard', icon: 'clipboard', mac: true, pro: true, tried: false, title: 'Everything you copy, saved.', line: 'Paste any of it back on your computer.', onPress: open.desktop },
   ];

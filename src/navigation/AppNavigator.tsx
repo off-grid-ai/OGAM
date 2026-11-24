@@ -1,3 +1,8 @@
+import { t } from '@offgrid/i18n';
+import { OnboardingGroupsScreen } from '../screens/OnboardingPicks/OnboardingGroupsScreen';
+import { OnboardingFeaturesScreen } from '../screens/OnboardingPicks/OnboardingFeaturesScreen';
+import { OnboardingGuideScreen } from '../screens/OnboardingPicks/OnboardingGuideScreen';
+import { WhatYouUseScreen } from '../screens/OnboardingPicks/WhatYouUseScreen';
 import React, { useEffect } from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
@@ -46,6 +51,7 @@ import {
   GuideScreen,
   GuideTopicScreen,
   AnalyticsInfoScreen,
+  LanguageScreen,
   ToolsScreen,
 } from '../screens';
 import {
@@ -160,7 +166,7 @@ const MainTabs: React.FC = () => {
         <Tab.Screen
           name="HomeTab"
           component={HomeScreen}
-          options={{ tabBarLabel: 'Home', tabBarButtonTestID: 'home-tab' }}
+          options={{ tabBarLabel: t('Home'), tabBarButtonTestID: 'home-tab' }}
           listeners={() => ({
             tabPress: () => { triggerHaptic('selection'); },
           })}
@@ -168,7 +174,7 @@ const MainTabs: React.FC = () => {
         <Tab.Screen
           name="ChatsTab"
           component={ChatsListScreen}
-          options={{ tabBarLabel: 'Chats', tabBarButtonTestID: 'chats-tab' }}
+          options={{ tabBarLabel: t('Chats'), tabBarButtonTestID: 'chats-tab' }}
           listeners={() => ({
             tabPress: () => { triggerHaptic('selection'); },
           })}
@@ -176,7 +182,7 @@ const MainTabs: React.FC = () => {
         <Tab.Screen
           name="ProjectsTab"
           component={ProjectsScreen}
-          options={{ tabBarLabel: 'Projects', tabBarButtonTestID: 'projects-tab' }}
+          options={{ tabBarLabel: t('Projects'), tabBarButtonTestID: 'projects-tab' }}
           listeners={() => ({
             tabPress: () => { triggerHaptic('selection'); },
           })}
@@ -184,7 +190,7 @@ const MainTabs: React.FC = () => {
         <Tab.Screen
           name="ModelsTab"
           component={ModelsScreen}
-          options={{ tabBarLabel: 'Models', tabBarButtonTestID: 'models-tab' }}
+          options={{ tabBarLabel: t('Models'), tabBarButtonTestID: 'models-tab' }}
           listeners={() => ({
             tabPress: () => { triggerHaptic('selection'); },
           })}
@@ -192,7 +198,7 @@ const MainTabs: React.FC = () => {
         <Tab.Screen
           name="ProTab"
           component={ProTabScreen}
-          options={{ tabBarLabel: 'Pro', tabBarButtonTestID: 'pro-tab' }}
+          options={{ tabBarLabel: t('Pro'), tabBarButtonTestID: 'pro-tab' }}
           listeners={() => ({
             tabPress: () => { triggerHaptic('selection'); },
           })}
@@ -200,7 +206,7 @@ const MainTabs: React.FC = () => {
         <Tab.Screen
           name="SettingsTab"
           component={SettingsScreen}
-          options={{ tabBarLabel: 'Settings', tabBarButtonTestID: 'settings-tab' }}
+          options={{ tabBarLabel: t('Settings'), tabBarButtonTestID: 'settings-tab' }}
           listeners={() => ({
             tabPress: () => { triggerHaptic('selection'); },
           })}
@@ -213,13 +219,15 @@ const MainTabs: React.FC = () => {
 export const AppNavigator: React.FC = () => {
   const { colors } = useTheme();
   const hasCompletedOnboarding = useAppStore((s) => s.hasCompletedOnboarding);
+  // Picks started but not finished: a restart resumes on the first pick step.
+  const pickingStarted = useAppStore((s) => s.onboardingPicks !== null);
   const downloadedModels = useAppStore((s) => s.downloadedModels);
   // Reactive: screens registered at runtime (Pro activation re-runs loadProFeatures)
   // mount as real routes live, so navigate('McpServers') works without an app restart.
   const registeredScreens = useRegisteredScreens();
 
   // Determine initial route
-  let initialRoute: keyof RootStackParamList = 'Onboarding';
+  let initialRoute: keyof RootStackParamList = pickingStarted ? 'OnboardingGroups' : 'Onboarding';
   if (hasCompletedOnboarding) {
     initialRoute = downloadedModels.length > 0 ? 'Main' : 'AutoSetup';
   }
@@ -237,6 +245,10 @@ export const AppNavigator: React.FC = () => {
         }}
       >
         <RootStack.Screen name="Onboarding" component={OnboardingScreen} />
+        <RootStack.Screen name="OnboardingGroups" component={OnboardingGroupsScreen} />
+        <RootStack.Screen name="OnboardingFeatures" component={OnboardingFeaturesScreen} />
+        <RootStack.Screen name="OnboardingGuide" component={OnboardingGuideScreen} />
+        <RootStack.Screen name="WhatYouUse" component={WhatYouUseScreen} />
         <RootStack.Screen name="AutoSetup" component={AutoSetupScreen} />
         <RootStack.Screen name="AdvancedSetup" component={AdvancedSetupScreen} />
         <RootStack.Screen name="Main" component={MainTabs} />
@@ -271,6 +283,7 @@ export const AppNavigator: React.FC = () => {
         <RootStack.Screen name="Guide" component={GuideScreen} />
         <RootStack.Screen name="GuideTopic" component={GuideTopicScreen} />
         <RootStack.Screen name="AnalyticsInfo" component={AnalyticsInfoScreen} />
+        <RootStack.Screen name="Language" component={LanguageScreen} />
         <RootStack.Screen name="Tools" component={ToolsScreen} />
         <RootStack.Screen
           name="DownloadManager"

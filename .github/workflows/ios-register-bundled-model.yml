@@ -1,0 +1,35 @@
+# Registers the bundled model's Background Assets extension with Apple: the App ID
+# ai.offgridmobile.BundledModel, the App Groups capability on it and on ai.offgridmobile, and it
+# fetches both App Store profiles to report whether they carry group.ai.offgridmobile.
+# Nothing is built or uploaded: no TestFlight, no store, no asset packs, no metadata.
+# It runs by hand, and when this file or the Fastfile (its lane) changes on the release branch (a new workflow cannot be
+# run by hand until it is on main). It is safe to run again: each step skips what already exists.
+#
+# Secrets: ASC_API_KEY_P8, ASC_KEY_ID, ASC_ISSUER_ID (already in the repo).
+name: iOS register bundled model extension
+
+on:
+  workflow_dispatch: {}
+  push:
+    branches: [feature/onboarding-picks]
+    paths: [.github/workflows/ios-register-bundled-model.yml, fastlane/Fastfile]
+
+jobs:
+  register:
+    runs-on: macos-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - name: Set up Ruby (fastlane)
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.3'
+          bundler-cache: true
+      - name: Register the App ID and App Groups, report the profiles
+        env:
+          ASC_API_KEY_P8: ${{ secrets.ASC_API_KEY_P8 }}
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+        run: bundle exec fastlane ios register_bundled_model

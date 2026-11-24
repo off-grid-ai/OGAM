@@ -45,6 +45,7 @@ import {
   isSuspiciousRecoveredImageModel,
 } from '../utils/modelSelectorFilters';
 import { migratePersistedState } from './appStoreMigrations';
+import type { Picks } from '@offgrid/features';
 import { repairedTextSelection } from '../services/activeModelService/selectedTextModel';
 import { defaultImageSteps } from '../utils/imageGenAdvice';
 
@@ -171,6 +172,10 @@ export interface AppState extends ProAccessSlice {
   setThemeMode: (mode: ThemeMode) => void;
   hasCompletedOnboarding: boolean;
   setOnboardingComplete: (complete: boolean) => void;
+  /** What onboarding asked: the groups and features picked. Null when nothing was picked (skipped,
+   *  or set up before onboarding asked): the app then looks as it always did. */
+  onboardingPicks: Picks | null;
+  setOnboardingPicks: (picks: Picks | null) => void;
   onboardingChecklist: OnboardingChecklist;
   checklistDismissed: boolean;
   completeChecklistStep: (key: string) => void;
@@ -371,6 +376,8 @@ export const useAppStore = create<AppState>()(
       hasCompletedOnboarding: false,
       setOnboardingComplete: complete =>
         set({ hasCompletedOnboarding: complete }),
+      onboardingPicks: null,
+      setOnboardingPicks: picks => set({ onboardingPicks: picks }),
       onboardingChecklist: { ...DEFAULT_CHECKLIST },
       checklistDismissed: false,
       completeChecklistStep: key =>
@@ -639,6 +646,7 @@ function persistedAppState(state: AppState) {
     themeMode: state.themeMode,
     boostPromoClosedVersion: state.boostPromoClosedVersion,
     hasCompletedOnboarding: state.hasCompletedOnboarding,
+    onboardingPicks: state.onboardingPicks,
     onboardingChecklist: state.onboardingChecklist,
     checklistDismissed: state.checklistDismissed,
     activeModelId: state.activeModelId,
@@ -659,6 +667,7 @@ function persistedAppState(state: AppState) {
     hasRegisteredPro: state.hasRegisteredPro,
     // Persist eviction so a relaunch cannot grant Pro while the roster is offline.
     proDeviceAdmission: state.proDeviceAdmission,
+    licenceRemovedBy: state.licenceRemovedBy,
     devProDisabled: state.devProDisabled,
     proBannerDismissed: state.proBannerDismissed,
     desktopPromoDismissed: state.desktopPromoDismissed,

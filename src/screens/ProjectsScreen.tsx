@@ -5,13 +5,12 @@ import {
   FlatList,
 } from 'react-native';
 import { ListGroupSeparator, listGroupRowEnds, listRowStyle } from '../components/ListGroup';
-import { TouchableOpacity } from '../components/Touchable';
 import { LIST_CLIPPING_PROPS } from '../constants/listClipping';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, CompositeNavigationProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
-import Swipeable from 'react-native-gesture-handler/Swipeable';
+import { SwipeToDelete } from '../components/SwipeToDelete';
 import Icon from 'react-native-vector-icons/Feather';
 import { Button } from '../components/Button';
 import { CustomAlert, showAlert, hideAlert, AlertState, initialAlertState } from '../components/CustomAlert';
@@ -106,17 +105,6 @@ export const ProjectsScreen: React.FC = () => {
     );
   };
 
-  const renderRightActions = (project: Project) => (
-    <TouchableOpacity
-      style={styles.deleteAction}
-      onPress={() => handleDeleteProject(project)}
-      accessibilityRole="button"
-      accessibilityLabel={`Delete ${project.name}`}
-    >
-      <Icon name="trash-2" size={16} color={colors.error} />
-    </TouchableOpacity>
-  );
-
   const handleNewProject = () => {
     navigation.navigate('ProjectEdit', {});
   };
@@ -127,11 +115,7 @@ export const ProjectsScreen: React.FC = () => {
     const when = formatWhen(lastUsed[item.id] ?? item.updatedAt);
 
     return (
-      <Swipeable
-        renderRightActions={() => renderRightActions(item)}
-        overshootRight={false}
-        containerStyle={styles.swipeableContainer}
-      >
+      <SwipeToDelete onDelete={() => handleDeleteProject(item)} label={item.name}>
         <AnimatedListItem
           index={index}
           trigger={focusTrigger}
@@ -158,7 +142,7 @@ export const ProjectsScreen: React.FC = () => {
           </View>
           <Icon name="chevron-right" size={14} color={colors.textMuted} />
         </AnimatedListItem>
-      </Swipeable>
+      </SwipeToDelete>
     );
   };
 
@@ -169,6 +153,7 @@ export const ProjectsScreen: React.FC = () => {
       <ScreenHeader
         title="Projects"
         variant="tab"
+        barBelow={projects.length > 0}
         right={
           <Button
             title="New"
@@ -180,10 +165,6 @@ export const ProjectsScreen: React.FC = () => {
           />
         }
       />
-
-      <Text style={styles.subtitle}>
-        Projects group related chats with shared context and instructions.
-      </Text>
 
       {projects.length === 0 ? (
         <View style={styles.emptyState}>
@@ -205,7 +186,7 @@ export const ProjectsScreen: React.FC = () => {
               title="New project"
               variant="hero"
               size="small"
-              icon={<Icon name="plus" size={16} color={colors.onHero} />}
+              icon={<Icon name="plus" size={16} color={colors.primary} />}
               onPress={handleNewProject}
               testID="new-project-empty-button"
             />
@@ -219,7 +200,6 @@ export const ProjectsScreen: React.FC = () => {
             placeholder="Search projects"
             clearLabel="Clear project search"
             testID="project-search-input"
-            style={styles.searchBar}
           />
           <FlatList
             {...SCROLL_DEPTH_PROPS}
@@ -247,27 +227,9 @@ const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
     flex: 1,
     backgroundColor: colors.background,
   },
-  swipeableContainer: {
-    overflow: 'visible' as const,
-  },
-  // Part of the header bar between the title and the search: the bar's background, stacked over the
-  // header's shadow, so the screen shows one bar with one shadow under the search.
-  subtitle: {
-    ...TYPOGRAPHY.bodySmall,
-    color: colors.textSecondary,
-    paddingHorizontal: SPACING.xl,
-    paddingTop: SPACING.sm,
-    paddingBottom: SPACING.xs,
-    backgroundColor: colors.background,
-    zIndex: 1,
-  },
   list: {
     paddingHorizontal: SPACING.xl,
     paddingVertical: SPACING.sm,
-  },
-  // The subtitle sits above the search bar, so the bar needs less space on top than on Chats.
-  searchBar: {
-    paddingTop: SPACING.sm,
   },
   noMatches: {
     ...TYPOGRAPHY.bodySmall,
@@ -341,14 +303,5 @@ const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
     ...TYPOGRAPHY.body,
     color: colors.primary,
     fontWeight: '400' as const,
-  },
-  deleteAction: {
-    backgroundColor: colors.errorBackground,
-    justifyContent: 'center' as const,
-    alignItems: 'center' as const,
-    width: 50,
-    borderRadius: 12,
-    marginBottom: SPACING.sm,
-    marginLeft: 10,
   },
 });

@@ -10,6 +10,7 @@
  * Every row is gated on a REGISTERED screen (`useHasRegisteredScreen`), so a build without a surface
  * never advertises it and there are no dead ends.
  */
+import { FEATURE_NAMES } from '@offgrid/features';
 import React from 'react';
 import { Text, View } from 'react-native';
 import { TouchableOpacity } from '../../components/Touchable';
@@ -33,20 +34,20 @@ const ROWS: IncludedRow[] = [
   {
     screen: 'Sync',
     icon: 'refresh-cw',
-    title: 'Live sync across your devices',
+    title: FEATURE_NAMES.sync,
     description: 'Your chats, projects, files, models and copied text stay current.',
   },
   {
     screen: 'Clipboard',
     icon: 'clipboard',
-    title: 'Copy here, paste there',
+    title: FEATURE_NAMES.clipboard,
     description: 'What you copy on one device is ready on the next one.',
   },
   {
     screen: 'McpServers',
     icon: 'terminal',
-    title: 'Your own tools, in your chats',
-    description: 'Point the model at your servers, files and APIs.',
+    title: FEATURE_NAMES.connectors,
+    description: 'Your email, calendar and MCP servers, in your chats.',
   },
 ];
 

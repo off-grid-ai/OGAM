@@ -96,7 +96,7 @@ const failedAmbientSend = {
   status: 'granted',
   createdAt: NOW,
   transferStatus: 'failed',
-  error: 'The other device went away',
+  error: 'device disconnected before the transfer finished',
   file: {
     syncId: AMBIENT_SYNC_ID,
     kind: 'screenshot',
@@ -160,7 +160,8 @@ describePro('the Activity list', () => {
     // retry, move closer, or give up. The alert role is how a screen reader gets it too.
     expect(ui.getByText('Screenshot.png')).toBeTruthy();
     expect(ui.getByText(/Could not send/)).toBeTruthy();
-    expect(ui.getByText('The other device went away')).toBeTruthy();
+    // The engine reason reaches the row as the shared one-line failure: it names the device and the step.
+    expect(ui.getByText('The Mac is not connected. Open Off Grid AI on it, then try again.')).toBeTruthy();
   });
 
   it('reads a received file as received, from the device it came from', () => {

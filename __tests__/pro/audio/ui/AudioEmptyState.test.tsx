@@ -21,6 +21,12 @@ jest.mock('react-native-vector-icons/Feather', () => {
 import { AudioEmptyState } from '@offgrid/pro/audio/ui/AudioEmptyState';
 import { recordingController } from '@offgrid/core/services/recordingController';
 import { voiceSession } from '@offgrid/core/services/voiceSession';
+import { useWhisperStore } from '@offgrid/core/stores/whisperStore';
+
+// The hero records only with a speech model on the phone, as the footer mic does.
+beforeEach(() => {
+  useWhisperStore.setState({ downloadedModelId: 'small.en' });
+});
 
 afterEach(() => {
   // No pollution: the controller is a module singleton — reset phase/handlers/listeners.
@@ -99,5 +105,20 @@ describe('AudioEmptyState', () => {
     unmount();
     // Would throw "update on unmounted" if the effect cleanup did not unsubscribe.
     expect(() => act(() => (voiceSession.dispatch('userStart'), voiceSession.dispatch('speechHeard')))).not.toThrow();
+  });
+
+  it('with no speech model, says so with Get a model, and a tap does not start recording', () => {
+    act(() => { useWhisperStore.setState({ downloadedModelId: null }); });
+    const { start } = registerRecorder();
+    render(<AudioEmptyState />);
+
+    expect(screen.getByText('Needs a speech model.')).toBeTruthy();
+    expect(screen.getByTestId('audio-hero-readiness-get-model')).toBeTruthy();
+    expect(screen.queryByText('Everything runs on your device')).toBeNull();
+
+    fireEvent.press(screen.getByTestId('audio-hero-mic'));
+
+    expect(start).not.toHaveBeenCalled();
+    expect(recordingController.getPhase()).not.toBe('recording');
   });
 });

@@ -5,6 +5,7 @@ import Icon from 'react-native-vector-icons/Feather';
 import { useTheme, useThemedStyles } from '../theme';
 import type { ThemeColors, ThemeShadows } from '../theme';
 import { TYPOGRAPHY, SPACING } from '../constants';
+import { cardFill } from '../theme/surface';
 
 export interface SearchFieldProps {
   value: string;
@@ -69,7 +70,9 @@ const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
     borderRadius: 12,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.borderLight,
-    backgroundColor: colors.surface,
+    // Glass, as the rows below it: the field sits on the screen's field, not raised above it (Mac,
+    // 2026-11-19: a raised white sheet with the controls inside it was "not looking very natural").
+    backgroundColor: cardFill(colors),
   },
   // Focus draws light to the field: an emerald edge and a soft ring (the composer's focus).
   rowFocused: {

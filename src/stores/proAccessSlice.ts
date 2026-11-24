@@ -26,6 +26,13 @@ export interface ProAccessSlice {
    * restart that put them in open contradiction - Pro granted while the header read "Device Not Active".
    */
   proDeviceAdmission: ProDeviceAdmission;
+  /**
+   * Another device removed this one from the licence: its name, '' when the name is not known, null
+   * when that did not happen. The credential is cleared on removal, so this is all that is left to
+   * say why Pro went. Getting Pro back clears it.
+   */
+  licenceRemovedBy: string | null;
+  setLicenceRemovedBy: (value: string | null) => void;
   setProDeviceAdmission: (value: ProDeviceAdmission) => void;
   /** Report the roster's boolean answer. A reported answer is by definition known, so it resolves the tri-state. */
   setProDeviceActive: (value: boolean) => void;
@@ -44,7 +51,8 @@ type SetProAccessState = (state: Partial<ProAccessSlice>) => void;
 export function createProAccessSlice(set: SetProAccessState): ProAccessSlice {
   return {
     hasRegisteredPro: false,
-    setHasRegisteredPro: value => set({ hasRegisteredPro: value }),
+    setHasRegisteredPro: value =>
+      set(value ? { hasRegisteredPro: value, licenceRemovedBy: null } : { hasRegisteredPro: value }),
     hasSavedProCredential: false,
     setHasSavedProCredential: value => set({ hasSavedProCredential: value }),
     isProActive: false,
@@ -52,6 +60,8 @@ export function createProAccessSlice(set: SetProAccessState): ProAccessSlice {
     hasExpiredProCredential: false,
     setHasExpiredProCredential: value => set({ hasExpiredProCredential: value }),
     proDeviceAdmission: 'unknown',
+    licenceRemovedBy: null,
+    setLicenceRemovedBy: value => set({ licenceRemovedBy: value }),
     setProDeviceAdmission: value => set({ proDeviceAdmission: value }),
     setProDeviceActive: value =>
       set({ proDeviceAdmission: value ? 'active' : 'inactive' }),

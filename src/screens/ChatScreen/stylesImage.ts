@@ -1,6 +1,8 @@
 import { Dimensions } from 'react-native';
 import type { ThemeColors, ThemeShadows } from '../../theme';
-import { TYPOGRAPHY, SPACING } from '../../constants';
+import { SPACING } from '../../constants';
+
+const VIEWER_BUTTON = 56;
 
 export const createImageStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
   imageViewerContainer: {
@@ -26,23 +28,34 @@ export const createImageStyles = (colors: ThemeColors, _shadows: ThemeShadows) =
     width: Dimensions.get('window').width,
     height: Dimensions.get('window').height * 0.7,
   },
+  // The actions share the screen's width: any number of them fits on the narrowest phone.
   imageViewerActions: {
     flexDirection: 'row' as const,
     position: 'absolute' as const,
-    bottom: 60,
-    gap: 40,
+    left: SPACING.lg,
+    right: SPACING.lg,
+    justifyContent: 'space-evenly' as const,
   },
   imageViewerButton: {
+    width: VIEWER_BUTTON,
+    height: VIEWER_BUTTON,
+    borderRadius: VIEWER_BUTTON / 2,
     alignItems: 'center' as const,
-    padding: 16,
+    justifyContent: 'center' as const,
     backgroundColor: colors.surface,
-    borderRadius: 16,
-    minWidth: 80,
   },
+  /** Icon buttons: the name is the accessibility label, not a caption. */
   imageViewerButtonText: {
-    ...TYPOGRAPHY.bodySmall,
-    color: colors.text,
-    marginTop: SPACING.xs,
-    fontWeight: '500' as const,
+    display: 'none' as const,
+  },
+  imageViewerClose: {
+    position: 'absolute' as const,
+    right: SPACING.lg,
+    width: VIEWER_BUTTON,
+    height: VIEWER_BUTTON,
+    borderRadius: VIEWER_BUTTON / 2,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+    backgroundColor: colors.surface,
   },
 });

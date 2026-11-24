@@ -100,7 +100,8 @@ export async function openPendingImprove(): Promise<void> {
   if (!navigator.hasRoute('ScribeImprove')) {
     await native.finish(request.id, null);
     await settled();
-    navigate('ProDetail');
+    // Without Pro, Scribe's own guide page: it says what Improve does and has Get Pro.
+    navigate('GuideTopic', { id: 'phone-improve' });
     return;
   }
   current = request.id;

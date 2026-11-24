@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>BAAppGroupID</key>
+	<string>group.ai.offgridmobile</string>
+	<key>BAHasManagedAssetPacks</key>
+	<true/>
+	<key>BAUsesAppleHosting</key>
+	<true/>
+	<key>CFBundleDisplayName</key>
+	<string>Off Grid AI model download</string>
+	<key>EXAppExtensionAttributes</key>
+	<dict>
+		<key>EXExtensionPointIdentifier</key>
+		<string>com.apple.background-asset-downloader-extension</string>
+	</dict>
+	<key>RCTNewArchEnabled</key>
+	<true/>
+</dict>
+</plist>

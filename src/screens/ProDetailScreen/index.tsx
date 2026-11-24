@@ -1,9 +1,9 @@
 import React, { useEffect, useState } from 'react';
+import { FEATURE_NAMES } from '@offgrid/features';
 import {
   View,
   Text,
   ScrollView,
-  Linking,
 } from 'react-native';
 import { TouchableOpacity } from '../../components/Touchable';
 import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
@@ -16,18 +16,19 @@ import {
   SPACING,
   TYPOGRAPHY,
   OFF_GRID_DESKTOP_BENEFIT,
-  OFF_GRID_DESKTOP_URL,
 } from '../../constants';
 import { selectHasProAccess } from '../../stores/proAccessSlice';
 import { useAppStore } from '../../stores';
 import { OfflineError, openProCheckout } from '../../services/proCheckout';
-import { withUtm } from '../../utils/utm';
+import { useOtherProduct } from '../../hooks/useOtherProduct';
 import { loadProFeatures } from '../../bootstrap/loadProFeatures';
 import { getPricingCopy } from '../../utils/proPricing';
 import { ScreenHeader } from '../../components/ScreenHeader';
 import { ProManageSection } from './ProManageSection';
 import { ProIncludedSection } from './ProIncludedSection';
 import { ProUnlockModal } from './ProUnlockModal';
+import { LicenceNotice } from '../../components/LicenceNotice';
+import { useHasRegisteredScreen } from '../../navigation/screenRegistry';
 import type { RootStackParamList } from '../../navigation/types';
 import { proPaywallViewed, proPurchased } from '../../services/analytics/analytics';
 import { AliveScreen } from '../../components/AliveScreen';
@@ -52,7 +53,7 @@ const PILLARS = [
   },
   {
     icon: 'refresh-cw',
-    title: 'Live sync across your devices',
+    title: FEATURE_NAMES.sync,
     desc: 'Your chats, projects, files, models, and copied text stay current over your own network, never a cloud relay.',
   },
   {
@@ -97,12 +98,12 @@ export const ProDetailScreen: React.FC = () => {
       .catch((e: unknown) => setOffline(e instanceof OfflineError))
       .finally(() => setOpening(false));
   };
-  const openDesktop = () => {
-    Linking.openURL(withUtm(OFF_GRID_DESKTOP_URL, 'pro-detail')).catch(
-      () => {},
-    );
-  };
+  // Get the desktop app, or Open it when one is already paired (the shared rule).
+  const desktop = useOtherProduct('pro-detail')('desktop');
   const openVerifyModal = () => setVerifyModalVisible(true);
+  // Sync stays open without Pro so a device that has Pro can hand it to this phone.
+  const canPair = useHasRegisteredScreen('Sync');
+  const openPairing = () => navigation.navigate('Sync' as never);
   // Back from the checkout sheet after paying: the key field opens, ready to paste.
   const unlockOnArrival = route.params?.unlock === true;
   useEffect(() => {
@@ -197,6 +198,14 @@ export const ProDetailScreen: React.FC = () => {
           </>
         ) : (
           <>
+            {/* Had Pro and lost it: the reason and the way back come before the pitch. */}
+            <LicenceNotice
+              onAction={{
+                renew: openPayPage,
+                'enter-key': openVerifyModal,
+                ...(canPair ? { 'pair-again': openPairing } : {}),
+              }}
+            />
             {/* Hero */}
             <View style={styles.hero}>
               <Text style={styles.heroTitle}>Intelligence, democratized.</Text>
@@ -237,7 +246,7 @@ export const ProDetailScreen: React.FC = () => {
             {/* CTAs — shared Button (outline). Buy is primary, verify is secondary. */}
             <Button
               title={pricing.cta}
-              variant="primary"
+              variant="hero"
               size="large"
               onPress={openPayPage}
               loading={opening}
@@ -255,6 +264,15 @@ export const ProDetailScreen: React.FC = () => {
               onPress={openVerifyModal}
               style={styles.verifyButton}
             />
+            {canPair ? (
+              <Button
+                title="Pair with a device that has Pro"
+                variant="ghost"
+                onPress={openPairing}
+                style={styles.verifyButton}
+                testID="pro-pair-for-pro"
+              />
+            ) : null}
           </>
         )}
 
@@ -262,18 +280,18 @@ export const ProDetailScreen: React.FC = () => {
             Pro surface points to Off Grid AI Desktop. Shown in both states. */}
         <TouchableOpacity
           style={styles.desktopRow}
-          onPress={openDesktop}
-          accessibilityRole="link"
-          accessibilityLabel="Get Off Grid AI Desktop"
+          onPress={desktop.onPress}
+          accessibilityRole={desktop.external ? 'link' : 'button'}
+          accessibilityLabel={desktop.label}
         >
           <View style={styles.desktopIconWrap}>
             <Icon name="monitor" size={18} color={colors.primary} />
           </View>
           <View style={styles.desktopText}>
-            <Text style={styles.desktopTitle}>Get Off Grid AI Desktop</Text>
+            <Text style={styles.desktopTitle}>{desktop.label}</Text>
             <Text style={styles.desktopDesc}>{OFF_GRID_DESKTOP_BENEFIT}</Text>
           </View>
-          <Icon name="external-link" size={16} color={colors.primary} />
+          <Icon name={desktop.icon} size={16} color={colors.primary} />
         </TouchableOpacity>
       </ScrollView>
 

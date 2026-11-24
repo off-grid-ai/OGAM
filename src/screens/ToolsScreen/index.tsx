@@ -1,4 +1,5 @@
 import React from 'react';
+import { FEATURE_NAMES } from '@offgrid/features';
 import { AppSwitch } from '../../components/AppSwitch';
 import { View, Text, ScrollView, StyleSheet } from 'react-native';
 import { TouchableOpacity } from '../../components/Touchable';
@@ -59,7 +60,7 @@ export const ToolsScreen: React.FC = () => {
             <Icon name="package" size={18} color={colors.textSecondary} />
           </View>
           <View style={styles.toolInfo}>
-            <Text style={styles.toolName}>Pro tools</Text>
+            <Text style={styles.toolName}>{FEATURE_NAMES.connectors}</Text>
             <Text style={styles.toolDescription}>Email, calendar and MCP servers</Text>
           </View>
           <Icon name="chevron-right" size={18} color={colors.textMuted} />
@@ -172,7 +173,9 @@ const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
     borderTopColor: colors.borderLight,
   },
   firstRow: { borderTopWidth: 0 },
+  // On the name's line, not centred on a description that wraps (design doc principle 6).
   toolIcon: {
+    alignSelf: 'flex-start' as const,
     width: 28,
     height: 28,
     alignItems: 'center' as const,

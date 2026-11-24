@@ -30,7 +30,7 @@ function ErrorFallback({ onReset }: { onReset: () => void }) {
       <Text style={styles.body}>
         The app hit an unexpected error. Your chats and models are saved on your device.
       </Text>
-      <Button title="Try Again" onPress={onReset} variant="primary" testID="error-boundary-retry" />
+      <Button title="Try Again" onPress={onReset} variant="hero" testID="error-boundary-retry" />
     </View>
   );
 }

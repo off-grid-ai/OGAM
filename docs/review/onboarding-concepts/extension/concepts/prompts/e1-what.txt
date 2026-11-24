@@ -1,0 +1,45 @@
+Use case: ui-mockup
+Asset type: flat, high-fidelity screenshot of the Off Grid AI browser extension welcome page, immediately after installation, step 1 of 5.
+Generate one landscape PNG at exactly 1536 x 1024 pixels.
+Input image 1 is the visual design and layout reference: desktop-groups.jpg. Match its real Off Grid AI desktop onboarding style closely. Replace its screen content with only the exact content specified below. This is a new screen, not a photograph of a screen.
+
+Style: near-black #0A0A0A canvas, subtle fine regular dot lattice across the page, one soft diffuse emerald light near the upper centre-right. Preserve the reference's quiet, understated translucent dark glass tiles, hairline borders, slight top highlights, generous wide composition, and rounded corners. Geist sans for all reading text: large light title, regular names and body. Geist Mono for small muted uppercase labels with restrained tracking. Everything is neutral grey except emerald #34D399 for selected edges, selected check dots, the single primary button and first progress segment. Thin Phosphor-style line icons. No bold oversized icons, no coloured badges. No PRO labels are needed. No illustration, 3D, device frame, browser chrome, watermark, or extra copy.
+
+Composition: full canvas edge to edge. Keep substantial open space above the content like the reference. Main content has approximately 40px left and right margins. Header begins around y=210. Small muted mono label at the top left, then the light large title below, then the muted subtitle. Grid starts around y=365. Five equally sized wide glass tiles, three across the first row and two across the second row; the second row is left aligned with columns one and two, leaving column three empty. Around 12px gutters, 18px corner radii and 178px tile height. Each tile has a small thin line icon at top left, then its name and a single unwrapped muted description aligned near the lower left with ample padding. All text must be legible and fully inside the tile. Make descriptions fit one line. Selected tiles have a restrained emerald hairline outline and a small filled emerald circle with a check at their upper right. Unselected tiles have neutral grey hairline outlines and no emerald. Keep background lattice faintly visible through glass.
+Icons: chat bubble; picture outline; pen; checklist; shield outline. Only tile 1 and tile 3 are selected.
+
+Exact visible text, with spelling, capitalisation and punctuation preserved. Do not display the quotation marks, numbering or em dashes that separate the instructions:
+Header label: "OFF GRID AI · IN YOUR BROWSER"
+Title: "What do you want to do?"
+Subtitle: "Pick any. Next you choose the details."
+
+Tile 1, first row left, selected:
+"Chat and ask"
+"Questions about any page or photo"
+
+Tile 2, first row centre, unselected:
+"Create"
+"Pictures from a sentence"
+
+Tile 3, first row right, selected:
+"Write"
+"Fix, rewrite and dictate in any text box"
+
+Tile 4, second row left, unselected:
+"Get work done"
+"It does the clicking, with your approval"
+
+Tile 5, second row centre, unselected:
+"Private and connected"
+"Passwords and sync"
+
+Footer: full width thin dark bottom bar with a neutral hairline top divider at about y=950. Left aligned muted sentence, sufficiently small to fit fully on one line without colliding with the centre progress:
+"Works with Off Grid AI on your computer. Nothing goes to a cloud."
+Centre: exactly five short horizontal progress segments, only segment 1 emerald, remaining four neutral dark grey. Tiny muted uppercase mono label directly beneath:
+"WHAT YOU WANT"
+Right: quiet text button followed by one rounded emerald primary button with dark text:
+"Skip, set it up"
+"Continue"
+No Back button. No additional screen numbers, names, headings, captions, promotional text or other copy. Render every exact string cleanly and without clipping.
+
+Correction pass: Input image 1 is the generated screen to correct. Input image 2 is the original style reference. Keep the generated screen's composition, all five tiles, all other text, colours, selection states and footer unchanged. Correct the top left label only: it must read exactly "OFF GRID AI · IN YOUR BROWSER". There MUST be a clear ordinary word space between GRID and AI, and the separator MUST be the centred dot character · (U+00B7), not a hyphen. It is three separate words OFF [space] GRID [space] AI. Set this exact line in clean, correctly spaced Geist Mono. Verify that both buttons remain fully visible with the exact texts "Skip, set it up" and "Continue". Retain the exact 1536 x 1024 pixel canvas.

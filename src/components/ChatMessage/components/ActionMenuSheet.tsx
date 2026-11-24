@@ -21,6 +21,8 @@ interface ActionMenuSheetProps {
   onGenerateImage: () => void;
   onSpeak: () => void;
   onTranscribeAgain?: () => void;
+  /** A reply shared as a picture card with the Off Grid AI mark (services/shareCard). */
+  onShareCard?: () => void;
 }
 
 export function ActionMenuSheet({
@@ -39,6 +41,7 @@ export function ActionMenuSheet({
   onGenerateImage,
   onSpeak,
   onTranscribeAgain,
+  onShareCard,
 }: ActionMenuSheetProps) {
   const { colors } = useTheme();
 
@@ -60,6 +63,18 @@ export function ActionMenuSheet({
           <Icon name="copy" size={18} color={colors.textSecondary} />
           <Text style={styles.actionSheetText}>Copy</Text>
         </AnimatedPressable>
+
+        {!isUser && onShareCard && (
+          <AnimatedPressable
+            testID="action-share-card"
+            hapticType="selection"
+            style={styles.actionSheetItem}
+            onPress={onShareCard}
+          >
+            <Icon name="share" size={18} color={colors.textSecondary} />
+            <Text style={styles.actionSheetText}>Share as card</Text>
+          </AnimatedPressable>
+        )}
 
         {canEdit && (
           <AnimatedPressable

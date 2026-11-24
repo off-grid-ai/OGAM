@@ -101,7 +101,7 @@ it('uses the existing budget for an Ollama model that accepts reasoning levels',
     budget.unmount();
 
     const chat = renderRoute('Chat');
-    fireEvent.press(await waitFor(() => chat.getByText('Select Model')));
+    fireEvent.press(await waitFor(() => chat.getByText('Choose model')));
     fireEvent.press(await waitFor(() => chat.getByText('Level Model')));
     fireEvent.changeText(await waitFor(() => chat.getByTestId('chat-input')), 'Answer with reasoning');
     fireEvent.press(await waitFor(() => chat.getByTestId('send-button')));

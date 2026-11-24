@@ -150,10 +150,10 @@ describe('Desktop tools in Pro tools', () => {
     if (!phone || !discovery?.publishedPort) throw new Error('Sync did not publish this phone');
     await desktop.engine.pair({ ...phone, host: '127.0.0.1', port: discovery.publishedPort }, await pairingCodeOnScreen(ui));
 
-    // Back to Settings › Off Grid AI Pro › Your own tools, in your chats.
+    // Back to Settings › Off Grid AI Pro › Connectors.
     fireEvent.press(ui.getAllByLabelText('Back').pop()!);
     fireEvent.press(await waitFor(() => ui!.getByText('Off Grid AI Pro')));
-    fireEvent.press(await waitFor(() => ui!.getByText('Your own tools, in your chats')));
+    fireEvent.press(await waitFor(() => ui!.getByText('Connectors')));
     const row = await waitFor(() => ui!.getByTestId(`companion-tools-${desktopDevice.id}`), { timeout: 10_000 });
     expect(row).toBeTruthy();
     expect(ui.queryByTestId('companion-tools-fp-kitchen-tablet')).toBeNull();

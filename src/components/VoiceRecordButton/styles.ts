@@ -169,7 +169,7 @@ export const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
   partialResultContainer: {
     position: 'absolute' as const,
     right: 50,
-    maxWidth: 200,
+    maxWidth: 240,
     paddingHorizontal: 10,
     paddingVertical: 6,
     backgroundColor: colors.surface,
@@ -178,5 +178,10 @@ export const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
   partialResultText: {
     color: colors.text,
     fontSize: 12,
+    lineHeight: 16,
+  },
+  /** Words still a guess: lighter, until their slice settles. */
+  partialResultInterim: {
+    color: colors.textMuted,
   },
 });

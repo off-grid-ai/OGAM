@@ -1,0 +1,366 @@
+[
+ {
+  "id": "slides",
+  "name": "The slides",
+  "group": "Mobile onboarding",
+  "what": "The welcome slides, unchanged. Skip and the last Next now lead to the picks.",
+  "file": "screens/v/slides-2.jpg",
+  "versions": [
+   {
+    "v": 1,
+    "label": "Before: on main",
+    "at": "2026-11-18T14:15:00Z",
+    "file": "screens/v/slides-1.jpg",
+    "clip": "screens/v/slides-1.mp4"
+   },
+   {
+    "v": 2,
+    "label": "One page, then picks",
+    "at": "2026-11-19T05:50:00Z",
+    "file": "screens/v/slides-2.jpg",
+    "what": "One page about Off Grid AI, then Get Started goes to the picks. The four slides and the Sync slide are gone.",
+    "android": "screens/v/slides-2-android.jpg"
+   }
+  ],
+  "checks": "OGAM \u00b7 CI not run",
+  "step": "welcome"
+ },
+ {
+  "id": "groups",
+  "name": "What do you want to do?",
+  "group": "Mobile onboarding",
+  "what": "Pick the jobs you want. Chat is picked to start.",
+  "file": "screens/v/groups-2.jpg",
+  "versions": [
+   {
+    "v": 1,
+    "label": "On iPhone 17 Pro Max",
+    "at": "2026-11-18T14:15:00Z",
+    "file": "screens/v/groups-1.jpg",
+    "clip": "screens/v/groups-1.mp4"
+   },
+   {
+    "v": 2,
+    "label": "Soft main button",
+    "at": "2026-11-19T05:50:00Z",
+    "file": "screens/v/groups-2.jpg",
+    "what": "Continue is the soft emerald main button.",
+    "android": "screens/v/groups-2-android.jpg"
+   }
+  ],
+  "checks": "OGAM \u00b7 CI not run",
+  "step": "groups"
+ },
+ {
+  "id": "features",
+  "name": "Which ones?",
+  "group": "Mobile onboarding",
+  "what": "The features in each picked group. With Pro already active there is no Get Pro offer.",
+  "file": "screens/v/features-2.jpg",
+  "versions": [
+   {
+    "v": 1,
+    "label": "On iPhone 17 Pro Max",
+    "at": "2026-11-18T14:15:00Z",
+    "file": "screens/v/features-1.jpg",
+    "clip": "screens/v/features-1.mp4"
+   },
+   {
+    "v": 2,
+    "label": "Soft main button",
+    "at": "2026-11-19T05:50:00Z",
+    "file": "screens/v/features-2.jpg",
+    "what": "Show me how it works is the soft emerald main button.",
+    "android": "screens/v/features-2-android.jpg"
+   }
+  ],
+  "checks": "OGAM \u00b7 CI not run",
+  "step": "details"
+ },
+ {
+  "id": "guide",
+  "name": "How it works",
+  "group": "Mobile onboarding",
+  "what": "One card per pick. Tap to see it; then set up the models.",
+  "file": "screens/v/guide-2.jpg",
+  "versions": [
+   {
+    "v": 1,
+    "label": "On iPhone 17 Pro Max",
+    "at": "2026-11-18T14:15:00Z",
+    "file": "screens/v/guide-1.jpg",
+    "clip": "screens/v/guide-1.mp4"
+   },
+   {
+    "v": 2,
+    "label": "Soft main button",
+    "at": "2026-11-19T05:50:00Z",
+    "file": "screens/v/guide-2.jpg",
+    "what": "Set up my models is the soft emerald main button.",
+    "android": "screens/v/guide-2-android.jpg"
+   }
+  ],
+  "checks": "OGAM \u00b7 CI not run",
+  "step": "guide"
+ },
+ {
+  "id": "guide-topic",
+  "name": "How it works: Images",
+  "group": "Mobile onboarding",
+  "what": "A pick opens its guide page, with a way to start right away.",
+  "file": "screens/v/guide-topic-2.jpg",
+  "versions": [
+   {
+    "v": 1,
+    "label": "On iPhone 17 Pro Max",
+    "at": "2026-11-18T14:15:00Z",
+    "file": "screens/v/guide-topic-1.jpg",
+    "clip": "screens/v/guide-topic-1.mp4"
+   },
+   {
+    "v": 2,
+    "label": "Make a picture",
+    "at": "2026-11-19T05:50:00Z",
+    "file": "screens/v/guide-topic-2.jpg",
+    "what": "The action says Make a picture, in the soft main button.",
+    "android": "screens/v/guide-topic-2-android.jpg"
+   }
+  ],
+  "checks": "OGAM \u00b7 CI not run"
+ },
+ {
+  "id": "setup",
+  "name": "Model setup",
+  "group": "Mobile onboarding",
+  "what": "Model setup comes checked for the picks: text, image and speech here.",
+  "file": "screens/v/setup-2.jpg",
+  "versions": [
+   {
+    "v": 0,
+    "label": "Before: on main",
+    "at": "2026-11-06T13:52:00Z",
+    "file": "screens/v/setup-0.jpg",
+    "what": "Model setup on main, before picks: the same tiers, with no link to what you picked."
+   },
+   {
+    "v": 1,
+    "label": "On iPhone 17 Pro Max",
+    "at": "2026-11-18T14:15:00Z",
+    "file": "screens/v/setup-1.jpg",
+    "clip": "screens/v/setup-1.mp4"
+   },
+   {
+    "v": 2,
+    "label": "Soft Download button",
+    "at": "2026-11-19T05:50:00Z",
+    "file": "screens/v/setup-2.jpg",
+    "what": "Download is the soft emerald main button.",
+    "android": "screens/v/setup-2-android.jpg"
+   }
+  ],
+  "checks": "OGAM \u00b7 CI not run",
+  "step": "setup"
+ },
+ {
+  "id": "home",
+  "name": "Home: your picks",
+  "group": "Mobile onboarding",
+  "what": "Home leads with what you picked.",
+  "file": "screens/v/home-2.jpg",
+  "versions": [
+   {
+    "v": 1,
+    "label": "On iPhone 17 Pro Max",
+    "at": "2026-11-18T14:15:00Z",
+    "file": "screens/v/home-1.jpg",
+    "clip": "screens/v/home-1.mp4"
+   },
+   {
+    "v": 2,
+    "label": "Picks open ready",
+    "at": "2026-11-19T05:50:00Z",
+    "file": "screens/v/home-2.jpg",
+    "what": "Your picks: Images and Video Studio open their feature ready, not a plain chat.",
+    "android": "screens/v/home-2-android.jpg"
+   }
+  ],
+  "checks": "OGAM \u00b7 CI not run",
+  "step": "home"
+ },
+ {
+  "id": "what-you-use",
+  "name": "Settings: What you use",
+  "group": "Mobile onboarding",
+  "what": "Change the picks any time. Home follows at once.",
+  "file": "screens/v/what-you-use-1.jpg",
+  "versions": [
+   {
+    "v": 1,
+    "label": "On iPhone 17 Pro Max",
+    "at": "2026-11-18T14:15:00Z",
+    "file": "screens/v/what-you-use-1.jpg",
+    "clip": "screens/v/what-you-use-1.mp4"
+   }
+  ],
+  "clip": "screens/v/what-you-use-1.mp4",
+  "checks": "OGAM \u00b7 CI not run",
+  "step": "what-you-use"
+ },
+ {
+  "id": "home-updated",
+  "name": "Home after a change",
+  "group": "Mobile onboarding",
+  "what": "Adding Ask your documents put Projects on Home.",
+  "file": "screens/v/home-updated-1.jpg",
+  "versions": [
+   {
+    "v": 1,
+    "label": "On iPhone 17 Pro Max",
+    "at": "2026-11-18T14:15:00Z",
+    "file": "screens/v/home-updated-1.jpg"
+   }
+  ],
+  "checks": "OGAM \u00b7 CI not run"
+ },
+ {
+  "id": "sync-rows",
+  "name": "Sync: saved devices",
+  "group": "Mobile sync",
+  "what": "Each icon sits on its name line; the status dot sits on the first status line, under the icon.",
+  "file": "screens/v/sync-rows-1.jpg",
+  "versions": [
+   {
+    "v": 1,
+    "label": "On iPhone 17 Pro Max",
+    "at": "2026-11-18T14:15:00Z",
+    "file": "screens/v/sync-rows-1.jpg"
+   }
+  ],
+  "checks": "OGAM \u00b7 CI not run"
+ },
+ {
+  "id": "images-chat",
+  "name": "Images pick: chat ready to draw",
+  "group": "Mobile onboarding",
+  "what": "With an image model, the Images pick opens a chat already in image mode: What should it draw?, three starters, the style strip.",
+  "file": "screens/v/images-chat-1-android.jpg",
+  "versions": [
+   {
+    "v": 1,
+    "label": "New",
+    "at": "2026-11-19T05:50:00Z",
+    "file": "screens/v/images-chat-1-android.jpg",
+    "android": "screens/v/images-chat-1-android.jpg"
+   }
+  ],
+  "checks": "OGAM \u00b7 CI rerunning"
+ },
+ {
+  "id": "images-result",
+  "name": "Images pick: first picture",
+  "group": "Mobile onboarding",
+  "what": "A starter draws a picture on the phone (58 s on the OnePlus), with Restyle under it.",
+  "file": "screens/v/images-result-1-android.jpg",
+  "versions": [
+   {
+    "v": 1,
+    "label": "New",
+    "at": "2026-11-19T05:50:00Z",
+    "file": "screens/v/images-result-1-android.jpg",
+    "android": "screens/v/images-result-1-android.jpg"
+   }
+  ],
+  "checks": "OGAM \u00b7 CI rerunning"
+ },
+ {
+  "id": "images-memory",
+  "name": "Images pick: low memory",
+  "group": "Mobile onboarding",
+  "what": "With 2.2 GB free on the phone, the image model is refused with Free memory & retry and Run anyway. Run anyway made the picture.",
+  "file": "screens/v/images-memory-1-android.jpg",
+  "versions": [
+   {
+    "v": 1,
+    "label": "New",
+    "at": "2026-11-19T05:50:00Z",
+    "file": "screens/v/images-memory-1-android.jpg",
+    "android": "screens/v/images-memory-1-android.jpg"
+   }
+  ],
+  "checks": "OGAM \u00b7 CI rerunning"
+ },
+ {
+  "id": "images-no-model",
+  "name": "Images pick: no model yet",
+  "group": "Mobile onboarding",
+  "what": "With no image model, the Images pick opens Models on the Image tab.",
+  "file": "screens/v/images-no-model-1.jpg",
+  "versions": [
+   {
+    "v": 1,
+    "label": "New",
+    "at": "2026-11-19T05:50:00Z",
+    "file": "screens/v/images-no-model-1.jpg"
+   }
+  ],
+  "checks": "OGAM \u00b7 CI rerunning"
+ },
+ {
+  "id": "video-no-model",
+  "name": "Video Studio pick: no model yet",
+  "group": "Mobile onboarding",
+  "what": "With no video or chat model, the Video Studio pick opens Models on the Video tab.",
+  "file": "screens/v/video-no-model-1.jpg",
+  "versions": [
+   {
+    "v": 1,
+    "label": "New",
+    "at": "2026-11-19T05:50:00Z",
+    "file": "screens/v/video-no-model-1.jpg"
+   }
+  ],
+  "checks": "OGAM \u00b7 CI rerunning"
+ },
+ {
+  "id": "models-search",
+  "name": "Models: search bar, scrolled",
+  "group": "Mobile onboarding",
+  "what": "Rows now scroll under a search bar with its own surface and edge shadow (was a bare field). Shared ListSearchBar; lint refuses a bare SearchField above a list.",
+  "file": "screens/v/models-search-1.jpg",
+  "versions": [
+   {
+    "v": 1,
+    "label": "New",
+    "at": "2026-11-19T05:50:00Z",
+    "file": "screens/v/models-search-1.jpg",
+    "android": "screens/v/models-search-1-android.jpg"
+   }
+  ],
+  "checks": "OGAM \u00b7 CI rerunning"
+ },
+ {
+  "id": "setup-stuck",
+  "name": "Model setup: finishes at Continue",
+  "group": "Mobile onboarding",
+  "what": "Found while shooting: the image model finished on disk (and Home lists it), but setup stayed at 98% with the spinner for 5+ minutes.",
+  "file": "screens/v/setup-stuck-2-android.jpg",
+  "versions": [
+   {
+    "v": 1,
+    "label": "Bug found",
+    "at": "2026-11-19T05:51:00Z",
+    "file": "screens/v/setup-stuck-1-android.jpg",
+    "android": "screens/v/setup-stuck-1-android.jpg"
+   },
+   {
+    "v": 2,
+    "label": "Fixed: setup reads the last change",
+    "at": "2026-11-19T06:17:00Z",
+    "file": "screens/v/setup-stuck-2-android.jpg",
+    "android": "screens/v/setup-stuck-2-android.jpg",
+    "what": "A real 947 MB image zip (Absolute Reality, NPU) downloads, extracts and setup ends at Continue; Home then lists Image 2."
+   }
+  ],
+  "checks": "Fixed, verified on Android"
+ }
+]

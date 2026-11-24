@@ -37,6 +37,20 @@ const writingPackagePath = path.resolve(sharedRoot, 'packages/writing');
 const notesPackagePath = path.resolve(sharedRoot, 'packages/notes');
 // @offgrid/notes-editor: the Notes Page editor, prebuilt as one HTML page for the WebView.
 const notesEditorPackagePath = path.resolve(sharedRoot, 'packages/notes-editor');
+// @offgrid/i18n: app languages. Its JSX runtime stands in for React's for this app's own code (see
+// resolveRequest), so text children and readable props show in the app language. In English it hands React
+// the same props. Library code in node_modules keeps React's runtime.
+const i18nPackagePath = path.resolve(sharedRoot, 'packages/i18n');
+// @offgrid/features: the one feature list (onboarding groups and parts, tiers, model kinds).
+const featuresPackagePath = path.resolve(sharedRoot, 'packages/features');
+// @offgrid/failures: why something failed, as one plain line and one next step (every product).
+const failuresPackagePath = path.resolve(sharedRoot, 'packages/failures');
+const i18nJsxRuntimes = {
+  'react/jsx-runtime': path.resolve(i18nPackagePath, 'dist/jsx-runtime.cjs'),
+  'react/jsx-dev-runtime': path.resolve(i18nPackagePath, 'dist/jsx-dev-runtime.cjs'),
+};
+const usesI18nRuntime = (origin) =>
+  !origin.startsWith(i18nPackagePath + path.sep) && !origin.includes(`${path.sep}node_modules${path.sep}`);
 const sharedNodeModulesPath = path.resolve(sharedRoot, 'node_modules');
 // A git worktree links each package to the main checkout (scripts/link-worktree-deps.sh). Metro
 // indexes files by their real path, so it must also watch the folder those links point into.
@@ -71,6 +85,9 @@ const config = {
     notesEditorPackagePath,
     uiPackagePath,
     designPackagePath,
+    i18nPackagePath,
+    featuresPackagePath,
+    failuresPackagePath,
     sharedNodeModulesPath,
     ...linkedNodeModulesPaths,
   ],
@@ -82,6 +99,14 @@ const config = {
       const syncRuntimeModule = syncRuntimeModules[moduleName];
       if (syncRuntimeModule) {
         return { type: 'sourceFile', filePath: syncRuntimeModule };
+      }
+      const i18nRuntime = i18nJsxRuntimes[moduleName];
+      if (i18nRuntime && usesI18nRuntime(context.originModulePath)) {
+        return { type: 'sourceFile', filePath: i18nRuntime };
+      }
+      // The translated catalogs (src/i18n/appLanguage.ts): '@offgrid/i18n' itself maps to one file below.
+      if (moduleName.startsWith('@offgrid/i18n/catalogs/')) {
+        return { type: 'sourceFile', filePath: path.resolve(i18nPackagePath, moduleName.slice('@offgrid/i18n/'.length)) };
       }
       return context.resolveRequest(context, moduleName, platform);
     },
@@ -102,6 +127,9 @@ const config = {
       '@offgrid/notes': path.resolve(notesPackagePath, 'dist/index.cjs'),
       '@offgrid/notes-editor/webview-html': path.resolve(notesEditorPackagePath, 'dist/webview-html.js'),
       '@offgrid/design': path.resolve(designPackagePath, 'dist/index.js'),
+      '@offgrid/i18n': path.resolve(i18nPackagePath, 'dist/index.cjs'),
+      '@offgrid/features': path.resolve(featuresPackagePath, 'dist/index.js'),
+      '@offgrid/failures': path.resolve(failuresPackagePath, 'dist/index.js'),
       // @offgrid/sync owns this dependency in its package manifest. Metro still needs the
       // out-of-root file dependency mapped to a watched, built CommonJS entry.
       '@offgrid/automation': path.resolve(automationPackagePath, 'dist/index.js'),

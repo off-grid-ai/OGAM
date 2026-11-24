@@ -132,7 +132,8 @@ describe('ChatsListScreen', () => {
       expect(view.getByText('Chats')).toBeTruthy();
       expect(view.getByText('New')).toBeTruthy();
       expect(view.getByText('No chats yet')).toBeTruthy();
-      expect(view.getByText('Download a model from the Models tab to start chatting.')).toBeTruthy();
+      expect(view.getByText('Needs a chat model.')).toBeTruthy();
+      expect(view.getByText('Get a model')).toBeTruthy();
       expect(view.queryByText('New chat')).toBeNull();
     });
 

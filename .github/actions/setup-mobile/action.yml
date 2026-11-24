@@ -132,8 +132,12 @@ runs:
         rm -rf ../shared
         mv _shared ../shared
         echo "dir=$(cd ../shared && pwd)" >> "$GITHUB_OUTPUT"
-        # Every shared package this app consumes; a package this shared commit lacks is skipped.
-        echo "packages=design automation sync rag models speech ui writing notes notes-editor" >> "$GITHUB_OUTPUT"
+        # Every shared package this app consumes, read from its file: dependencies, so a package the
+        # app adds is built here without a second list to keep in step (features and i18n were
+        # missed that way). automation has no file: dependency, so it stays named. A package this
+        # shared commit lacks is skipped.
+        consumed=$(node -e 'const d=require("./package.json").dependencies||{};console.log(Object.values(d).map(v=>(/^file:\.\.\/shared\/packages\/(.+)$/.exec(v)||[])[1]).filter(Boolean).join(" "))')
+        echo "packages=$(echo automation $consumed | tr ' ' '\n' | sort -u | tr '\n' ' ')" >> "$GITHUB_OUTPUT"
     - name: Restore the built shared packages
       id: shared_cache
       if: ${{ inputs.workspace == 'true' && inputs.private-token != '' && inputs.shared == 'true' }}
@@ -143,7 +147,7 @@ runs:
           ${{ steps.shared.outputs.dir }}/node_modules
           ${{ steps.shared.outputs.dir }}/packages/*/node_modules
           ${{ steps.shared.outputs.dir }}/packages/*/dist
-        key: shared-${{ runner.os }}-${{ runner.arch }}-node26-${{ steps.shared.outputs.sha }}-${{ hashFiles('.github/actions/setup-mobile/action.yml') }}
+        key: shared-${{ runner.os }}-${{ runner.arch }}-node26-${{ steps.shared.outputs.sha }}-${{ hashFiles('.github/actions/setup-mobile/action.yml', 'package.json') }}
     - name: Build shared
       if: ${{ inputs.workspace == 'true' && inputs.private-token != '' && inputs.shared == 'true' && steps.shared_cache.outputs.cache-hit != 'true' }}
       shell: bash

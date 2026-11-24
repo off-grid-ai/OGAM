@@ -2,12 +2,18 @@ import { NavigatorScreenParams } from '@react-navigation/native';
 
 export type RootStackParamList = {
   Onboarding: undefined;
+  OnboardingGroups: undefined;
+  OnboardingFeatures: undefined;
+  OnboardingGuide: undefined;
+  WhatYouUse: undefined;
   AutoSetup: undefined;
   AdvancedSetup: undefined;
   AnalyticsInfo: undefined;
+  Language: undefined;
   Main: NavigatorScreenParams<MainTabParamList> | undefined;
   // Former ChatsStack
-  Chat: { conversationId?: string; projectId?: string };
+  /** `mode` opens a new chat already making pictures or clips (a pick from onboarding, Video Studio). */
+  Chat: { conversationId?: string; projectId?: string; mode?: ChatStartMode };
   // Former ProjectsStack
   ProjectDetail: { projectId: string };
   ProjectEdit: { projectId?: string };
@@ -47,6 +53,9 @@ export type RootStackParamList = {
   About: undefined;
   Tools: undefined;
 };
+
+/** What a new chat starts making: pictures or clips. */
+type ChatStartMode = 'image' | 'video';
 
 // Tab navigator — simple, no sub-stacks
 export type MainTabParamList = {

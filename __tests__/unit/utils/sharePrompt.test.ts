@@ -1,6 +1,7 @@
 import { Linking, Platform } from 'react-native';
 import {
   maybeScheduleSharePrompt,
+  noteTurnNotGood,
   resetSharePromptSession,
   subscribeSharePrompt,
   emitSharePrompt,
@@ -21,27 +22,47 @@ describe('maybeScheduleSharePrompt — at most once per session', () => {
     try { fn(emits); } finally { unsub(); }
   }
 
+  const good = (variant: 'text' | 'image' = 'text', hasEngaged = false) =>
+    maybeScheduleSharePrompt({ variant, hasEngaged, delayMs: 0 });
+
   it('emits ONCE per session even when triggered many times (no 2/10/20 re-show)', () => {
     withListener(emits => {
-      for (const count of [2, 3, 10, 20, 50]) {
-        maybeScheduleSharePrompt({ variant: 'text', count, hasEngaged: false, delayMs: 0 });
-      }
+      for (let i = 0; i < 20; i += 1) good();
       jest.runOnlyPendingTimers();
       expect(emits).toEqual(['text']); // exactly one, not one per milestone
     });
   });
 
-  it('does not emit on the very first generation (count < 2), avoids first-run stacking', () => {
+  it('waits for the third good reply in a row', () => {
     withListener(emits => {
-      maybeScheduleSharePrompt({ variant: 'text', count: 1, hasEngaged: false, delayMs: 0 });
+      good();
+      good();
       jest.runOnlyPendingTimers();
       expect(emits).toEqual([]);
+      good();
+      jest.runOnlyPendingTimers();
+      expect(emits).toEqual(['text']);
+    });
+  });
+
+  it('never follows a failed, refused or stopped turn: the run of good ones starts again', () => {
+    withListener(emits => {
+      good();
+      good();
+      noteTurnNotGood();
+      good();
+      good();
+      jest.runOnlyPendingTimers();
+      expect(emits).toEqual([]);
+      good();
+      jest.runOnlyPendingTimers();
+      expect(emits).toEqual(['text']);
     });
   });
 
   it('never emits once the user has already engaged (persisted)', () => {
     withListener(emits => {
-      maybeScheduleSharePrompt({ variant: 'text', count: 2, hasEngaged: true, delayMs: 0 });
+      for (let i = 0; i < 3; i += 1) good('text', true);
       jest.runOnlyPendingTimers();
       expect(emits).toEqual([]);
     });
@@ -49,10 +70,14 @@ describe('maybeScheduleSharePrompt — at most once per session', () => {
 
   it('emits again in a NEW session (after resetSharePromptSession)', () => {
     withListener(emits => {
-      maybeScheduleSharePrompt({ variant: 'image', count: 2, hasEngaged: false, delayMs: 0 });
+      for (let i = 0; i < 3; i += 1) good('image');
       jest.runOnlyPendingTimers();
-      resetSharePromptSession(); // relaunch = new session
-      maybeScheduleSharePrompt({ variant: 'image', count: 2, hasEngaged: false, delayMs: 0 });
+      resetSharePromptSession(); // relaunch = new session, and a new run of good replies
+      good('image');
+      jest.runOnlyPendingTimers();
+      expect(emits).toEqual(['image']);
+      good('image');
+      good('image');
       jest.runOnlyPendingTimers();
       expect(emits).toEqual(['image', 'image']); // once each session
     });

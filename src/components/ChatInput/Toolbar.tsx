@@ -11,6 +11,8 @@ import { createStyles } from './styles';
 export interface QueueView {
   items: { id: string; text: string; now?: boolean }[];
   hold?: ChatQueueHold;
+  /** The messages wait for the first chat model to download: what to say, and whether it stopped. */
+  waiting?: { label: string; failed: boolean };
 }
 
 export interface QueueActions {
@@ -20,6 +22,8 @@ export interface QueueActions {
   /** Send what is held, after a Stop or a failed reply. */
   onResume: () => void;
   onClear: () => void;
+  /** Start the stopped download the messages wait for again. */
+  onRetryModel?: () => void;
 }
 
 interface QueueRowProps {
@@ -42,7 +46,8 @@ export const QueueRow: React.FC<QueueRowProps> = ({ queue, actions }) => {
   const styles = useThemedStyles(createStyles);
   const items = queue?.items ?? [];
   if (items.length === 0) return null;
-  const held = queue?.hold && !items.some(item => item.now) ? queue.hold : undefined;
+  const waiting = queue?.waiting;
+  const held = !waiting && queue?.hold && !items.some(item => item.now) ? queue.hold : undefined;
   return (
     <Animated.View
       testID="queue-indicator"
@@ -55,7 +60,24 @@ export const QueueRow: React.FC<QueueRowProps> = ({ queue, actions }) => {
         <View style={styles.queueBadge}>
           <Text style={styles.queueBadgeText}>{items.length} queued</Text>
           {held ? <Text style={styles.queuePreview}>{HOLD_LABEL[held]}</Text> : null}
+          {waiting ? (
+            <Text style={styles.queuePreview} numberOfLines={1} testID="queue-waiting-label">
+              {waiting.label}
+            </Text>
+          ) : null}
         </View>
+        {waiting?.failed ? (
+          <TouchableOpacity
+            testID="queue-retry-model-button"
+            accessibilityRole="button"
+            accessibilityLabel="Retry the model download"
+            style={styles.queueResumeButton}
+            onPress={actions?.onRetryModel}
+            hitSlop={HIT_SLOP}
+          >
+            <Text style={styles.queueResumeText}>Retry</Text>
+          </TouchableOpacity>
+        ) : null}
         {held ? (
           <TouchableOpacity
             testID="queue-resume-button"
@@ -91,7 +113,8 @@ export const QueueRow: React.FC<QueueRowProps> = ({ queue, actions }) => {
           <Text style={styles.queueItemText} numberOfLines={1}>
             {item.text}
           </Text>
-          <TouchableOpacity
+          {/* A message waiting for its model cannot go sooner: no send-now. */}
+          {waiting ? null : <TouchableOpacity
             testID={`queued-send-now-${index}`}
             accessibilityRole="button"
             accessibilityLabel="Send queued message now"
@@ -100,7 +123,7 @@ export const QueueRow: React.FC<QueueRowProps> = ({ queue, actions }) => {
             hitSlop={HIT_SLOP}
           >
             <Icon name="corner-down-left" size={14} />
-          </TouchableOpacity>
+          </TouchableOpacity>}
           <TouchableOpacity
             testID={`queued-remove-${index}`}
             accessibilityRole="button"

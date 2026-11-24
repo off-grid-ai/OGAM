@@ -83,22 +83,32 @@ let shownThisSession = false;
 /** Clear the once-per-session guard (call on app launch; also used by tests). */
 export function resetSharePromptSession(): void {
   shownThisSession = false;
+  goodTurnsInARow = 0;
+}
+
+// Good replies in a row this session. A failed or refused turn, or a stopped reply, starts it again,
+// so the ask only ever follows things that worked.
+const GOOD_TURNS_BEFORE_ASK = 3;
+let goodTurnsInARow = 0;
+
+/** A turn that did not work (an error, a memory refusal) or was stopped: the ask waits for a new run. */
+export function noteTurnNotGood(): void {
+  goodTurnsInARow = 0;
 }
 
 /**
- * Schedule the rating ask — at most ONCE per app session, and never after the user
- * has rated or chosen "Don't ask again" (that flag is persisted). Skips the
- * very first generation (count < 2) so it doesn't stack with first-run sheets. The
- * SINGLE trigger for both the text and image generation paths (no per-path cadence).
+ * A reply or image that worked. Schedules the rating ask after the third good one in a row - at most
+ * ONCE per app session, and never after the user has rated or chosen "Don't ask again" (that flag is
+ * persisted). The SINGLE trigger for both the text and image generation paths.
  */
 export function maybeScheduleSharePrompt(opts: {
   variant: ShareVariant;
-  count: number;
   hasEngaged: boolean;
   delayMs: number;
 }): void {
-  const { variant, count, hasEngaged, delayMs } = opts;
-  if (hasEngaged || shownThisSession || count < 2) return;
+  const { variant, hasEngaged, delayMs } = opts;
+  goodTurnsInARow += 1;
+  if (hasEngaged || shownThisSession || goodTurnsInARow < GOOD_TURNS_BEFORE_ASK) return;
   shownThisSession = true;
   setTimeout(() => emitSharePrompt(variant), delayMs);
 }

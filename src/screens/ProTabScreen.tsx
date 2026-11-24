@@ -44,12 +44,20 @@ export const ProTabScreen: React.FC = () => {
   ));
   // Off Grid AI beyond this phone: Boost's cloud models, the desktop app and the browser extension.
   const elsewhere = [
-    { key: 'boost', icon: 'cloud', title: 'Boost', line: BOOST.line, onPress: openBoost },
+    { key: 'boost', icon: 'cloud', title: 'Boost', line: BOOST.line, external: true, onPress: openBoost },
     ...([['computer', 'Desktop'], ['extension', 'Browser extension']] as const).flatMap(([id, title]) => {
       const topic = topics.find(t => t.id === id);
       const action = topic ? actionFor(topic) : null;
       return topic && action
-        ? [{ key: id, icon: topic.icon, title, line: topic.tagline, onPress: action.onPress }]
+        ? [{
+          key: id,
+          icon: topic.icon,
+          title,
+          // A paired desktop is one tap away: the row says Open, not the pitch.
+          line: action.external ? topic.tagline : action.label,
+          external: action.external,
+          onPress: action.onPress,
+        }]
         : [];
     }),
   ];
@@ -120,7 +128,7 @@ export const ProTabScreen: React.FC = () => {
                 <Text style={styles.navItemTitle}>{card.title}</Text>
                 <Text style={styles.navItemDesc} numberOfLines={2}>{card.line}</Text>
               </View>
-              <Icon name="external-link" size={16} color={colors.textMuted} />
+              <Icon name={card.external ? 'external-link' : 'chevron-right'} size={16} color={colors.textMuted} />
             </TouchableOpacity>
           ))}
         </View>
