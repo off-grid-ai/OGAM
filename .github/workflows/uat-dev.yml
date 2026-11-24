@@ -317,9 +317,10 @@ jobs:
         run: bash scripts/uat.sh --upload-only --ios
 
   finalize:
-    # Tag only once every upload that runs has shipped: a failure anywhere leaves no tag.
+    # A release carries the APK, the AAB and the IPA, so it waits for both uploads: a run for
+    # one platform reaches its store but cuts no release.
     needs: [plan, upload-android, upload-ios]
-    if: ${{ !cancelled() && !contains(needs.*.result, 'failure') && (needs.upload-android.result == 'success' || needs.upload-ios.result == 'success') }}
+    if: ${{ !cancelled() && needs.upload-android.result == 'success' && needs.upload-ios.result == 'success' }}
     runs-on: ubuntu-latest
     env:
       UAT_VERSION: ${{ needs.plan.outputs.version }}
@@ -338,11 +339,9 @@ jobs:
       - uses: actions/download-artifact@v4
         with: { name: uat-notes, path: '${{ github.workspace }}/../uat-notes' }
       - name: Fetch the Android build
-        if: ${{ needs.upload-android.result == 'success' }}
         uses: actions/download-artifact@v4
         with: { name: uat-android, path: android/app/build/outputs }
       - name: Fetch the iOS build
-        if: ${{ needs.upload-ios.result == 'success' }}
         uses: actions/download-artifact@v4
         with: { name: uat-ios, path: build }
       - name: Configure git for the beta bump commit + push

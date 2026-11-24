@@ -314,6 +314,13 @@ fi
 if stage upload; then info "Uploaded; the tag and the GitHub prerelease wait for every platform (--finalize)."; exit 0; fi
 
 # ── success → commit the bump, cut the PRERELEASE tag, GH prerelease ──
+# Every beta release carries all three: the APK (sideload), the AAB (Play) and the IPA (TestFlight).
+# A run that built only one platform uploads to its store but cuts no release.
+for f in android/app/build/outputs/apk/release/app-release.apk \
+         android/app/build/outputs/bundle/release/app-release.aab \
+         build/OffgridMobile.ipa; do
+  [ -f "$f" ] || error "No release without the APK, AAB and IPA: $f is missing. Run the beta for both platforms."
+done
 trap - EXIT   # keep the bump now that the build shipped
 # package.json (and npm's copy of the number in the lock) always ride the commit: the version bump is
 # not platform-specific, and leaving it out would let the next cut read a stale base and reuse this
@@ -341,15 +348,9 @@ GH_ARGS=()
 APK_DST="$ROOT_DIR/OffgridMobile-${BETA_VERSION}.apk"
 AAB_DST="$ROOT_DIR/OffgridMobile-${BETA_VERSION}.aab"
 IPA_DST="$ROOT_DIR/OffgridMobile-${BETA_VERSION}.ipa"
-if [ "$DO_ANDROID" = 1 ]; then
-  [ -f android/app/build/outputs/apk/release/app-release.apk ] && \
-    { cp android/app/build/outputs/apk/release/app-release.apk "$APK_DST"; GH_ARGS+=("$APK_DST"); }
-  [ -f android/app/build/outputs/bundle/release/app-release.aab ] && \
-    { cp android/app/build/outputs/bundle/release/app-release.aab "$AAB_DST"; GH_ARGS+=("$AAB_DST"); }
-fi
-if [ "$DO_IOS" = 1 ]; then
-  [ -f build/OffgridMobile.ipa ] && { cp build/OffgridMobile.ipa "$IPA_DST"; GH_ARGS+=("$IPA_DST"); }
-fi
+cp android/app/build/outputs/apk/release/app-release.apk "$APK_DST"; GH_ARGS+=("$APK_DST")
+cp android/app/build/outputs/bundle/release/app-release.aab "$AAB_DST"; GH_ARGS+=("$AAB_DST")
+cp build/OffgridMobile.ipa "$IPA_DST"; GH_ARGS+=("$IPA_DST")
 # Carry the tested build id into the prerelease body too (redundant with the annotated tag),
 # so `gh release view "$TAG"` is a second recovery path if the local tag object is missing.
 printf '\n\n%s\n' "$BUILD_LINE" >> "$NOTES_FILE"
