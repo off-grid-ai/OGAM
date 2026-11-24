@@ -447,6 +447,116 @@ describe('the licence this phone holds', () => {
     });
   });
 
+  describe('after an OS update breaks the Keystore key (Android 17)', () => {
+    const LICENCE_SERVICE = 'off-grid-pro-license';
+    const KEYSTORE_ERROR = 'Wrapped error: Keystore operation failed';
+
+    /**
+     * The licence entry's Android Keystore key stops working, as it did on a motorola edge 60 after the
+     * Android 17 update: every read and write of the entry fails until the entry, and with it the key, is
+     * reset. `resetFixes: false` is a keystore that keeps failing after the reset.
+     */
+    const breakLicenceKey = ({ resetFixes = true } = {}) => {
+      const store = keychain();
+      let broken = true;
+      const get = store.getGenericPassword.getMockImplementation()!;
+      const set = store.setGenericPassword.getMockImplementation()!;
+      store.getGenericPassword.mockImplementation(
+        async (options: { service: string }) => {
+          if (broken && options.service === LICENCE_SERVICE) {
+            throw new Error(KEYSTORE_ERROR);
+          }
+          return get(options);
+        },
+      );
+      store.setGenericPassword.mockImplementation(
+        async (
+          user: string,
+          password: string,
+          options: { service: string },
+        ) => {
+          if (broken && options.service === LICENCE_SERVICE) {
+            throw new Error(KEYSTORE_ERROR);
+          }
+          return set(user, password, options);
+        },
+      );
+      store.resetGenericPassword.mockImplementation(
+        async ({ service }: { service: string }) => {
+          if (service === LICENCE_SERVICE && resetFixes) broken = false;
+          return secrets.delete(service);
+        },
+      );
+    };
+
+    it('asks for the key again, and one paste saves it and turns Pro on', async () => {
+      const provider = load();
+      provider.setDirectEntitlementActivationOwner(activationOwner().owner);
+      await expect(
+        provider.proLicenseProvider.activate!(LICENCE_KEY),
+      ).resolves.toEqual({ ok: true });
+
+      breakLicenceKey();
+
+      // The saved licence is behind the broken key, so the phone cannot prove it: it asks again.
+      await expect(provider.proLicenseProvider.readActive()).resolves.toBe(
+        false,
+      );
+      await expect(
+        provider.proLicenseProvider.activate!(LICENCE_KEY),
+      ).resolves.toEqual({ ok: true });
+      await expect(provider.proLicenseProvider.readActive()).resolves.toBe(
+        true,
+      );
+      expect(secrets.get(LICENCE_SERVICE)).toContain(LICENCE_KEY);
+    });
+
+    it('saves the pasted key even when the broken key was never read first', async () => {
+      breakLicenceKey();
+      const provider = load();
+      provider.setDirectEntitlementActivationOwner(activationOwner().owner);
+
+      await expect(
+        provider.proLicenseProvider.activate!(LICENCE_KEY),
+      ).resolves.toEqual({ ok: true });
+      await expect(provider.proLicenseProvider.readActive()).resolves.toBe(
+        true,
+      );
+    });
+
+    it('gives the seat back when the keystore still fails after the reset', async () => {
+      breakLicenceKey({ resetFixes: false });
+      const provider = load();
+      const mesh = activationOwner();
+      provider.setDirectEntitlementActivationOwner(mesh.owner);
+
+      const result = await provider.proLicenseProvider.activate!(LICENCE_KEY);
+
+      expect(result.ok).toBe(false);
+      expect(mesh.calls).toEqual(['prepare', 'rollback']);
+      await expect(provider.proLicenseProvider.readActive()).resolves.toBe(
+        false,
+      );
+    });
+
+    it('does not call a lost licence "no licence" when removing this device', async () => {
+      const provider = load();
+      provider.setDirectEntitlementActivationOwner(activationOwner().owner);
+      await provider.proLicenseProvider.activate!(LICENCE_KEY);
+      breakLicenceKey();
+
+      // The seat may still name this phone, so the reset reports it could not finish; the broken entry is
+      // gone, so the next paste can save.
+      await expect(
+        provider.proLicenseProvider.resetCurrentDevice!(),
+      ).resolves.toBe(false);
+      expect(secrets.has(LICENCE_SERVICE)).toBe(false);
+      expect(keygen.machines(LICENCE_KEY).map(m => m.fingerprint)).toContain(
+        FINGERPRINT,
+      );
+    });
+  });
+
   describe('what the Settings screen shows', () => {
     it('says nothing is stored on a fresh install', async () => {
       const provider = load();
