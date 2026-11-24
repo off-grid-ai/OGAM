@@ -177,7 +177,9 @@ jobs:
   build-ios:
     needs: plan
     if: ${{ inputs.platform != 'android' }}
-    runs-on: macos-latest
+    # Intel Macs: a separate runner pool from arm64, which had no free runners for hours (2026-11-24).
+    # A device build cross-compiles for arm64, so the IPA is the same.
+    runs-on: macos-15-intel
     env:
       UAT_VERSION: ${{ needs.plan.outputs.version }}
       UAT_BETA_N: ${{ needs.plan.outputs.beta_n }}
@@ -279,7 +281,9 @@ jobs:
   upload-ios:
     needs: [plan, build-android, build-ios]
     if: ${{ !cancelled() && !contains(needs.*.result, 'failure') && needs.build-ios.result == 'success' }}
-    runs-on: macos-latest
+    # Intel Macs: a separate runner pool from arm64, which had no free runners for hours (2026-11-24).
+    # A device build cross-compiles for arm64, so the IPA is the same.
+    runs-on: macos-15-intel
     env:
       UAT_VERSION: ${{ needs.plan.outputs.version }}
       UAT_BETA_N: ${{ needs.plan.outputs.beta_n }}
