@@ -4,10 +4,6 @@
 <dict>
 	<key>BAAppGroupID</key>
 	<string>group.ai.offgridmobile</string>
-	<key>BAHasManagedAssetPacks</key>
-	<true/>
-	<key>BAUsesAppleHosting</key>
-	<true/>
 	<key>CFBundleDisplayName</key>
 	<string>Off Grid AI model download</string>
 	<key>EXAppExtensionAttributes</key>
