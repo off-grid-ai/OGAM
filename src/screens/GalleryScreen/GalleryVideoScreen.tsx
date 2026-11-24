@@ -12,6 +12,7 @@ import { useAppStore } from '../../stores';
 import type { RootStackParamList } from '../../navigation/types';
 import { resolveDocumentPath } from '../../utils/resolveDocumentPath';
 import { createStyles, VIEWER_INK } from './styles';
+import { ReportMediaSheet } from '../../components/ReportMediaSheet';
 import { formatDate } from './useGalleryActions';
 import { askDeleteVideo, saveVideo } from './galleryMedia';
 
@@ -30,6 +31,7 @@ export const GalleryVideoScreen: React.FC = () => {
   const styles = useThemedStyles(createStyles);
   const { top } = useSafeAreaInsets();
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [reportOpen, setReportOpen] = useState(false);
   const [alertState, setAlertState] = useState<AlertState>(initialAlertState);
   // Delete's confirmation opens once the sheet has fully closed, so two sheets never meet mid-dismiss.
   const afterClose = useRef<(() => void) | null>(null);
@@ -106,6 +108,17 @@ export const GalleryVideoScreen: React.FC = () => {
             </TouchableOpacity>
             <TouchableOpacity
               style={styles.imageSheetAction}
+              // After the sheet closes, so the report sheet never meets this one mid-dismiss.
+              onPress={() => closeSheetThen(() => setReportOpen(true))}
+              accessibilityRole="button"
+              accessibilityLabel="Report"
+              testID="gallery-video-report"
+            >
+              <Icon name="flag" size={22} color={colors.text} />
+              <Text style={styles.imageSheetActionText}>Report</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.imageSheetAction}
               onPress={() => closeSheetThen(() => askDeleteVideo(video, setAlertState, () => navigation.goBack()))}
               accessibilityRole="button"
               accessibilityLabel="Delete"
@@ -134,6 +147,15 @@ export const GalleryVideoScreen: React.FC = () => {
             <Text style={styles.detailDate}>{formatDate(video.createdAt)}</Text>
           </ScrollView>
         </AppSheet>
+      ) : null}
+      {video ? (
+        <ReportMediaSheet
+          visible={reportOpen}
+          onClose={() => setReportOpen(false)}
+          kind="video"
+          prompt={video.prompt}
+          modelId={video.modelId}
+        />
       ) : null}
       <CustomAlert {...alertState} onClose={() => setAlertState(hideAlert())} />
     </View>
