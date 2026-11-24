@@ -36,6 +36,7 @@ function fakePlay(initial: Record<string, PackState>): FakePlay {
   const removed: string[] = [];
   return {
     canMoveFiles: true,
+    inApp: true,
     removed,
     getPacks: async names => Object.fromEntries(names.map(n => [n, initial[n]])),
     fetch: async names => Object.fromEntries(names.map(n => [n, initial[n]])),
@@ -154,9 +155,9 @@ describe('startBundledModel', () => {
     expect(model?.fileSize).toBe(WEIGHTS);
   });
 
-  it('with no port given it asks the platform, which on this test platform has no packs: a fresh install downloads the same model', async () => {
+  it('with no port given it asks the platform: outside the app (this test, the web preview) there is no native module, and nothing downloads', async () => {
     await expect(svc.startBundledModel()).resolves.toBeUndefined();
-    expect(downloads().downloads[KEY]?.modelId).toBe('LiquidAI/LFM3-VL-2B-GGUF');
+    expect(downloads().downloads[KEY]).toBeUndefined();
   });
 
   it('on iOS the files are copied out of the system storage, then the pack is removed', async () => {

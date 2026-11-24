@@ -87,7 +87,7 @@ async function follow(port: BundledModelPort): Promise<void> {
 async function settle(port: BundledModelPort, state: BundledModelState): Promise<boolean> {
   switch (state.kind) {
     case 'absent':
-      startWithoutPacks();
+      if (port.inApp) startWithoutPacks();
       return true;
     case 'arrived':
       await adopt(port, state.paths);
