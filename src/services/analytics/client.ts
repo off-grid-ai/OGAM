@@ -107,7 +107,6 @@ export function createAnalyticsClient(options: AnalyticsClientOptions): Analytic
  * it neither needs nor turns on analytics. Rejects when PostHog did not take it.
  */
 export async function sendOneEvent(event: string, properties: Properties): Promise<void> {
-  if (POSTHOG_API_KEY.length === 0) throw new Error('analytics key missing');
   const res = await fetch(`${POSTHOG_HOST}/i/v0/e/`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
