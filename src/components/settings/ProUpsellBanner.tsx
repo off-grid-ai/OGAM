@@ -20,6 +20,8 @@ interface Props {
   /** Re-trigger the entrance animation when the screen regains focus. */
   trigger: number;
   onGetPro: () => void;
+  /** Bought already: opens the key field, without going through the checkout page. */
+  onEnterKey: () => void;
 }
 
 /**
@@ -27,7 +29,7 @@ interface Props {
  * (hidden once Pro is active or the banner is dismissed). Flat, token-only, and
  * weights <= 400 per docs/design.
  */
-export const ProUpsellBanner: React.FC<Props> = ({ trigger, onGetPro }) => {
+export const ProUpsellBanner: React.FC<Props> = ({ trigger, onGetPro, onEnterKey }) => {
   const { colors, isDark } = useTheme();
   const styles = useThemedStyles(createStyles);
   // A saved credential may need device reactivation, but it is never an upsell.
@@ -73,6 +75,17 @@ export const ProUpsellBanner: React.FC<Props> = ({ trigger, onGetPro }) => {
         </View>
 
         <Button title={pricing.cta} variant="hero" size="small" onPress={onGetPro} style={styles.cta} />
+
+        <AnimatedPressable
+          style={[styles.linkRow, styles.desktopLink]}
+          onPress={onEnterKey}
+          accessibilityRole="button"
+          accessibilityLabel="I have a license key"
+          testID="pro-upsell-enter-key"
+        >
+          <Text style={styles.linkText}>I have a license key</Text>
+          <Icon name="key" size={16} color={colors.primary} />
+        </AnimatedPressable>
 
         <AnimatedPressable
           style={[styles.linkRow, styles.desktopLink]}

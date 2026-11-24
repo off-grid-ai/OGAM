@@ -424,6 +424,7 @@ export const FIXED_ACTION_IDS: readonly string[] = [
   "pro-tab-licence",
   "pro-tab-screen",
   "pro-tools-back",
+  "pro-upsell-enter-key",
   "progress",
   "project-chats-count",
   "project-detail-screen",

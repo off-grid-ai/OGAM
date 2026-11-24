@@ -181,6 +181,7 @@ export const SettingsScreen: React.FC = () => {
         <ProUpsellBanner
           trigger={focusTrigger}
           onGetPro={() => getPro('settings-banner')}
+          onEnterKey={() => navigation.navigate('ProDetail', { unlock: true })}
         />
 
         {/* Navigation Items. Appearance is the first row of the same list, not a card of its own
