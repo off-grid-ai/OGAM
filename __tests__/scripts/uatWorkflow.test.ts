@@ -55,7 +55,9 @@ it('Android and iOS build in parallel, uploads wait for both builds, finalize wa
     expect(jobs[upload].if).toContain("!contains(needs.*.result, 'failure')");
   }
   expect(needs('finalize')).toEqual(expect.arrayContaining(['upload-android', 'upload-ios']));
-  expect(jobs.finalize.if).toContain("!contains(needs.*.result, 'failure')");
+  // A release carries the APK, the AAB and the IPA: it is cut only when both uploads succeeded.
+  expect(jobs.finalize.if).toContain("needs.upload-android.result == 'success'");
+  expect(jobs.finalize.if).toContain("needs.upload-ios.result == 'success'");
   expect(jobs.finalize.steps.some(step => step.run?.includes('scripts/uat.sh --finalize'))).toBe(true);
 });
 
