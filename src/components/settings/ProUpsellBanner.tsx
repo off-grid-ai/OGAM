@@ -1,7 +1,5 @@
 import React from 'react';
 import { View, Text, Image } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
-import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { TouchableOpacity } from '../Touchable';
 import Icon from 'react-native-vector-icons/Feather';
 import { AnimatedEntry } from '../AnimatedEntry';
@@ -17,12 +15,13 @@ import {
 } from '../../constants';
 import { useOtherProduct } from '../../hooks/useOtherProduct';
 import { getPricingCopy } from '../../utils/proPricing';
-import type { RootStackParamList } from '../../navigation/types';
 
 interface Props {
   /** Re-trigger the entrance animation when the screen regains focus. */
   trigger: number;
   onGetPro: () => void;
+  /** Bought already: opens the key field, without going through the checkout page. */
+  onEnterKey: () => void;
 }
 
 /**
@@ -30,7 +29,7 @@ interface Props {
  * (hidden once Pro is active or the banner is dismissed). Flat, token-only, and
  * weights <= 400 per docs/design.
  */
-export const ProUpsellBanner: React.FC<Props> = ({ trigger, onGetPro }) => {
+export const ProUpsellBanner: React.FC<Props> = ({ trigger, onGetPro, onEnterKey }) => {
   const { colors, isDark } = useTheme();
   const styles = useThemedStyles(createStyles);
   // A saved credential may need device reactivation, but it is never an upsell.
@@ -44,9 +43,6 @@ export const ProUpsellBanner: React.FC<Props> = ({ trigger, onGetPro }) => {
   const pricing = getPricingCopy();
   // Get the desktop app, or Open it when one is already paired (the shared rule).
   const desktop = useOtherProduct('pro-upsell')('desktop');
-  // Bought already: the key field opens here, without going through the checkout page.
-  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
-  const enterKey = () => navigation.navigate('ProDetail', { unlock: true });
 
   if (!show) return null;
 
@@ -82,7 +78,7 @@ export const ProUpsellBanner: React.FC<Props> = ({ trigger, onGetPro }) => {
 
         <AnimatedPressable
           style={[styles.linkRow, styles.desktopLink]}
-          onPress={enterKey}
+          onPress={onEnterKey}
           accessibilityRole="button"
           accessibilityLabel="I have a license key"
           testID="pro-upsell-enter-key"

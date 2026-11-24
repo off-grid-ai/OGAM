@@ -67,7 +67,13 @@ export const ProTabScreen: React.FC = () => {
       <ScreenField />
       <ScreenHeader title="Pro" variant="tab" />
       <ScrollView {...SCROLL_DEPTH_PROPS} style={styles.scrollView} contentContainerStyle={styles.content}>
-        {hasPro ? null : <ProUpsellBanner trigger={focusTrigger} onGetPro={() => getPro('pro-tab')} />}
+        {hasPro ? null : (
+          <ProUpsellBanner
+            trigger={focusTrigger}
+            onGetPro={() => getPro('pro-tab')}
+            onEnterKey={() => navigation.navigate('ProDetail', { unlock: true })}
+          />
+        )}
         <View style={styles.navSection}>
           {features.map((topic, index) => {
             const action = actionFor(topic);
