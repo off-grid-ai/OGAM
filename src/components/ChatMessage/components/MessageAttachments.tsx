@@ -25,6 +25,8 @@ import { MediaAttachment } from '../../../types';
 import { viewDocument } from '@react-native-documents/viewer';
 import logger from '../../../utils/logger';
 import { resolveDocumentPath } from '../../../utils/resolveDocumentPath';
+import { useAppStore } from '../../../stores';
+import { ReportMediaSheet } from '../../ReportMediaSheet';
 
 interface FadeInImageProps {
   uri: string;
@@ -87,6 +89,7 @@ const createVideoAttachmentStyles = (colors: ThemeColors, shadows: ThemeShadows)
     ...shadows.small,
   },
   pictureInPicture: { width: SPACING.xl * 2, height: SPACING.xl * 2, paddingHorizontal: 0 },
+  extraControls: { flexDirection: 'row' as const },
 });
 
 const fadeInImageStyles = StyleSheet.create({
@@ -134,6 +137,12 @@ function VideoAttachment({ attachment }: { attachment: MediaAttachment }) {
   });
   const [loaded, setLoaded] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+  // A generated clip can be reported (Play AI-generated content policy); its Gallery record has the prompt.
+  const generated = useAppStore(state => {
+    const path = resolveMediaUri(attachment.uri).replace(/^file:\/\//, '');
+    return state.generatedVideos.find(video => resolveDocumentPath(video.videoPath).replace(/^file:\/\//, '') === path);
+  });
+  const [reportOpen, setReportOpen] = React.useState(false);
   return (
     <View style={videoAttachmentStyles.container}>
       <VideoPlayer
@@ -147,22 +156,36 @@ function VideoAttachment({ attachment }: { attachment: MediaAttachment }) {
         disableControlsAutoHide
         disableMute
         additionalControl={
-          <Button
-            title=""
-            accessibilityLabel="Picture in picture"
-            variant="ghost"
-            size="small"
-            disabled={!loaded}
-            icon={<Icon name="minimize-2" size={SPACING.lg} color={colors.text} />}
-            style={videoAttachmentStyles.pictureInPicture}
-            onPress={async () => {
-              try {
-                await player.current?.enterPictureInPicture();
-              } catch {
-                setError('Picture in picture is not available on this device.');
-              }
-            }}
-          />
+          <View style={videoAttachmentStyles.extraControls}>
+            <Button
+              title=""
+              accessibilityLabel="Picture in picture"
+              variant="ghost"
+              size="small"
+              disabled={!loaded}
+              icon={<Icon name="minimize-2" size={SPACING.lg} color={colors.text} />}
+              style={videoAttachmentStyles.pictureInPicture}
+              onPress={async () => {
+                try {
+                  await player.current?.enterPictureInPicture();
+                } catch {
+                  setError('Picture in picture is not available on this device.');
+                }
+              }}
+            />
+            {generated ? (
+              <Button
+                title=""
+                accessibilityLabel="Report"
+                variant="ghost"
+                size="small"
+                icon={<Icon name="flag" size={SPACING.lg} color={colors.text} />}
+                style={videoAttachmentStyles.pictureInPicture}
+                onPress={() => setReportOpen(true)}
+                testID="chat-video-report"
+              />
+            ) : null}
+          </View>
         }
         pauseOnPress
         animationDuration={reducedMotion ? 0 : 150}
@@ -196,6 +219,15 @@ function VideoAttachment({ attachment }: { attachment: MediaAttachment }) {
         }}
       />
       {error && <Text accessibilityRole="alert" style={{ ...TYPOGRAPHY.bodySmall, color: colors.error }}>{error}</Text>}
+      {generated ? (
+        <ReportMediaSheet
+          visible={reportOpen}
+          onClose={() => setReportOpen(false)}
+          kind="video"
+          prompt={generated.prompt}
+          mediaPath={generated.videoPath}
+        />
+      ) : null}
 
     </View>
   );

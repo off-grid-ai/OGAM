@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   ModelSelectorModal,
   GenerationSettingsModal,
@@ -10,6 +10,8 @@ import { useTheme } from '../../theme';
 import { ImageViewerModal } from './ChatScreenComponents';
 import { useAppStore } from '../../stores/appStore';
 import { useSlot, SLOTS } from '../../bootstrap/slotRegistry';
+import { ReportMediaSheet } from '../../components/ReportMediaSheet';
+import { resolveDocumentPath } from '../../utils/resolveDocumentPath';
 
 type StylesType = ReturnType<typeof createStyles>;
 type ColorsType = ReturnType<typeof useTheme>['colors'];
@@ -84,6 +86,11 @@ export const ChatModalSection: React.FC<ChatModalSectionProps> = ({
   const AnimateAction = useSlot(SLOTS.imageAnimateAction);
   const videoCount = useAppStore(state => state.generatedVideos.filter(video => video.conversationId === activeConversationId).length);
   const mediaCount = imageCount + videoCount;
+  // Only a generated picture can be reported: the open one, matched to its Gallery record for the prompt.
+  const viewerGenerated = useAppStore(state => (viewerImageUri
+    ? state.generatedImages.find(image => viewerImageUri.replace(/^file:\/\//, '') === resolveDocumentPath(image.imagePath).replace(/^file:\/\//, ''))
+    : undefined));
+  const [reported, setReported] = useState<{ prompt: string; path: string } | null>(null);
   return (
   <>
     <ProjectSelectorSheet
@@ -134,8 +141,20 @@ export const ChatModalSection: React.FC<ChatModalSectionProps> = ({
       onClose={() => setViewerImageUri(null)}
       onSave={handleSaveImage}
       onShare={handleShareImage}
+      onReport={viewerGenerated ? () => {
+        // The viewer closes first: a sheet does not show over its modal.
+        setReported({ prompt: viewerGenerated.prompt, path: viewerGenerated.imagePath });
+        setViewerImageUri(null);
+      } : undefined}
       AnimateAction={AnimateAction}
       conversationId={activeConversationId}
+    />
+    <ReportMediaSheet
+      visible={reported !== null}
+      onClose={() => setReported(null)}
+      kind="image"
+      prompt={reported?.prompt ?? ''}
+      mediaPath={reported?.path ?? ''}
     />
   </>
   );

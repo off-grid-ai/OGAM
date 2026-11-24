@@ -12,6 +12,7 @@ import type { RootStackParamList } from '../../navigation/types';
 import { resolveDocumentPath } from '../../utils/resolveDocumentPath';
 import { useSlot, SLOTS } from '../../bootstrap/slotRegistry';
 import { createStyles, VIEWER_INK } from './styles';
+import { ReportMediaSheet } from '../../components/ReportMediaSheet';
 import { formatDate } from './useGalleryActions';
 import { askDeleteImage, saveImage } from './galleryMedia';
 import { shareMarkedImage } from '../../services/shareCard';
@@ -32,6 +33,7 @@ export const GalleryImageScreen: React.FC = () => {
   // Video is Pro: "Animate this photo" fills this slot.
   const AnimateAction = useSlot(SLOTS.imageAnimateAction);
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [reportOpen, setReportOpen] = useState(false);
   const [alertState, setAlertState] = useState<AlertState>(initialAlertState);
   // Delete's confirmation opens once the sheet has fully closed, so two sheets never meet mid-dismiss.
   const afterClose = useRef<(() => void) | null>(null);
@@ -139,6 +141,17 @@ export const GalleryImageScreen: React.FC = () => {
             </TouchableOpacity>
             <TouchableOpacity
               style={styles.imageSheetAction}
+              // After the sheet closes, so the report sheet never meets this one mid-dismiss.
+              onPress={() => closeSheetThen(() => setReportOpen(true))}
+              accessibilityRole="button"
+              accessibilityLabel="Report"
+              testID="gallery-image-report"
+            >
+              <Icon name="flag" size={22} color={colors.text} />
+              <Text style={styles.imageSheetActionText}>Report</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.imageSheetAction}
               onPress={() => closeSheetThen(() => askDeleteImage(image, setAlertState, () => navigation.goBack()))}
               accessibilityRole="button"
               accessibilityLabel="Delete"
@@ -172,6 +185,15 @@ export const GalleryImageScreen: React.FC = () => {
             <Text style={styles.detailDate}>{formatDate(image.createdAt)}</Text>
           </ScrollView>
         </AppSheet>
+      ) : null}
+      {image ? (
+        <ReportMediaSheet
+          visible={reportOpen}
+          onClose={() => setReportOpen(false)}
+          kind="image"
+          prompt={image.prompt}
+          mediaPath={image.imagePath}
+        />
       ) : null}
       <CustomAlert {...alertState} onClose={() => setAlertState(hideAlert())} />
     </View>
