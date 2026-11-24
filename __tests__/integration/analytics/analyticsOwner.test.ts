@@ -539,3 +539,36 @@ it('a skipped onboarding is sent at once when Usage is already on, and only once
   expect(sent.skipped).toBe(true);
   expect(sent.groups).toBeUndefined();
 });
+
+it('a content report is sent with analytics off, carries no file, and does not start analytics', async () => {
+  const { analytics, endpoint, flush } = await setup(null);
+  await analytics.contentReported({ type: 'image', reason: 'violent', prompt: 'a paper boat', model: 'sd-turbo' });
+  await analytics.contentReported({ type: 'video', reason: 'other', prompt: 'a pond', model: 'wan-2.2-5b' });
+  analytics.featureUsed('tools');
+  await flush();
+
+  const reports = endpoint.named('content_reported');
+  expect(reports.map(report => report.properties)).toEqual([
+    expect.objectContaining({ type: 'image', reason: 'violent', prompt: 'a paper boat', model: 'sd-turbo', platform: 'android' }),
+    expect.objectContaining({ type: 'video', reason: 'other', prompt: 'a pond', model: 'wan-2.2-5b', platform: 'android' }),
+  ]);
+  expect(reports[0].properties.$process_person_profile).toBe(false);
+  // Each report stands alone: no shared ID ties it to the install or to another report.
+  expect(reports[0].distinct_id).not.toBe(reports[1].distinct_id);
+  // Nothing else went: analytics stayed off.
+  expect(endpoint.events.map(event => event.event)).toEqual(['content_reported', 'content_reported']);
+});
+
+it('a content report PostHog refuses is reported as not sent', async () => {
+  const { analytics, endpoint } = await setup(null);
+  const accepting = globalThis.fetch;
+  globalThis.fetch = (async () => new Response('busy', { status: 503 })) as typeof fetch;
+  try {
+    await expect(
+      analytics.contentReported({ type: 'image', reason: 'other', prompt: 'p', model: 'm' }),
+    ).rejects.toThrow('content_reported not sent (503)');
+  } finally {
+    globalThis.fetch = accepting;
+  }
+  expect(endpoint.events).toEqual([]);
+});
