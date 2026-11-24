@@ -90,7 +90,7 @@ export const ChatModalSection: React.FC<ChatModalSectionProps> = ({
   const viewerGenerated = useAppStore(state => (viewerImageUri
     ? state.generatedImages.find(image => viewerImageUri.replace(/^file:\/\//, '') === resolveDocumentPath(image.imagePath).replace(/^file:\/\//, ''))
     : undefined));
-  const [reported, setReported] = useState<{ prompt: string; path: string } | null>(null);
+  const [reported, setReported] = useState<{ prompt: string; modelId: string } | null>(null);
   return (
   <>
     <ProjectSelectorSheet
@@ -143,7 +143,7 @@ export const ChatModalSection: React.FC<ChatModalSectionProps> = ({
       onShare={handleShareImage}
       onReport={viewerGenerated ? () => {
         // The viewer closes first: a sheet does not show over its modal.
-        setReported({ prompt: viewerGenerated.prompt, path: viewerGenerated.imagePath });
+        setReported({ prompt: viewerGenerated.prompt, modelId: viewerGenerated.modelId });
         setViewerImageUri(null);
       } : undefined}
       AnimateAction={AnimateAction}
@@ -154,7 +154,7 @@ export const ChatModalSection: React.FC<ChatModalSectionProps> = ({
       onClose={() => setReported(null)}
       kind="image"
       prompt={reported?.prompt ?? ''}
-      mediaPath={reported?.path ?? ''}
+      modelId={reported?.modelId ?? ''}
     />
   </>
   );

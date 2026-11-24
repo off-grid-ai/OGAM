@@ -225,7 +225,7 @@ function VideoAttachment({ attachment }: { attachment: MediaAttachment }) {
           onClose={() => setReportOpen(false)}
           kind="video"
           prompt={generated.prompt}
-          mediaPath={generated.videoPath}
+          modelId={generated.modelId}
         />
       ) : null}
 

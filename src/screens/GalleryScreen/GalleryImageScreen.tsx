@@ -192,7 +192,7 @@ export const GalleryImageScreen: React.FC = () => {
           onClose={() => setReportOpen(false)}
           kind="image"
           prompt={image.prompt}
-          mediaPath={image.imagePath}
+          modelId={image.modelId}
         />
       ) : null}
       <CustomAlert {...alertState} onClose={() => setAlertState(hideAlert())} />

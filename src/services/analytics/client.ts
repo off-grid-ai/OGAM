@@ -100,3 +100,24 @@ export function createAnalyticsClient(options: AnalyticsClientOptions): Analytic
     },
   };
 }
+
+/**
+ * One event straight to PostHog's capture endpoint, outside the opt-in client, for a send the person
+ * asked for themselves (a content report). No SDK, no anonymous ID, no queue, no person profile:
+ * it neither needs nor turns on analytics. Rejects when PostHog did not take it.
+ */
+export async function sendOneEvent(event: string, properties: Properties): Promise<void> {
+  if (POSTHOG_API_KEY.length === 0) throw new Error('analytics key missing');
+  const res = await fetch(`${POSTHOG_HOST}/i/v0/e/`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      api_key: POSTHOG_API_KEY,
+      event,
+      // A fresh ID per send, so a report links to no install and no analytics history.
+      distinct_id: `${event}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`,
+      properties: { ...properties, $process_person_profile: false, $geoip_disable: true },
+    }),
+  });
+  if (!res.ok) throw new Error(`${event} not sent (${res.status})`);
+}

@@ -154,7 +154,7 @@ export const GalleryVideoScreen: React.FC = () => {
           onClose={() => setReportOpen(false)}
           kind="video"
           prompt={video.prompt}
-          mediaPath={video.videoPath}
+          modelId={video.modelId}
         />
       ) : null}
       <CustomAlert {...alertState} onClose={() => setAlertState(hideAlert())} />

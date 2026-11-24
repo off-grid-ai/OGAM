@@ -483,7 +483,6 @@ export const FIXED_ACTION_IDS: readonly string[] = [
   "repairing-vision",
   "repeat-penalty",
   "report-failed",
-  "report-include-media",
   "report-send",
   "report-sent",
   "required-thinking-advice",

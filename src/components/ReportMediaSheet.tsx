@@ -2,7 +2,6 @@ import React, { useEffect, useState } from 'react';
 import { View, Text } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
 import { AppSheet } from './AppSheet';
-import { AppSwitch } from './AppSwitch';
 import { Button } from './Button';
 import { TouchableOpacity } from './Touchable';
 import { useTheme, useThemedStyles } from '../theme';
@@ -20,34 +19,32 @@ interface Props {
   onClose: () => void;
   kind: ReportKind;
   prompt: string;
-  mediaPath: string;
+  modelId: string;
 }
 
 type Phase = 'idle' | 'sending' | 'sent' | 'failed';
 
 /**
- * Report a generated image or video: pick a reason, choose whether to include the picture or clip,
- * send. The prompt and the reason go to the developer; the media only when switched on.
+ * Report a generated image or video: pick a reason, send. The reason, the prompt and the model go to
+ * the developer; the picture or clip stays on the phone.
  */
-export const ReportMediaSheet: React.FC<Props> = ({ visible, onClose, kind, prompt, mediaPath }) => {
+export const ReportMediaSheet: React.FC<Props> = ({ visible, onClose, kind, prompt, modelId }) => {
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
   const [reason, setReason] = useState<ReportReason | null>(null);
-  const [includeMedia, setIncludeMedia] = useState(false);
   const [phase, setPhase] = useState<Phase>('idle');
 
   // Every opening starts clean.
   useEffect(() => {
     if (!visible) return;
     setReason(null);
-    setIncludeMedia(false);
     setPhase('idle');
   }, [visible]);
 
   const send = () => {
     if (!reason) return;
     setPhase('sending');
-    sendContentReport({ kind, reason, prompt, mediaPath, includeMedia }).then(
+    sendContentReport({ kind, reason, prompt, modelId }).then(
       () => setPhase('sent'),
       () => setPhase('failed'),
     );
@@ -84,18 +81,6 @@ export const ReportMediaSheet: React.FC<Props> = ({ visible, onClose, kind, prom
               </TouchableOpacity>
             );
           })}
-          <View style={[styles.row, styles.switchRow]}>
-            <View style={styles.switchText}>
-              <Text style={styles.rowText}>Include the {noun}</Text>
-              <Text style={styles.hint}>Off: only the prompt and your reason are sent.</Text>
-            </View>
-            <AppSwitch
-              value={includeMedia}
-              onValueChange={setIncludeMedia}
-              accessibilityLabel={`Include the ${noun}`}
-              testID="report-include-media"
-            />
-          </View>
           {phase === 'failed' ? (
             <Text style={styles.error} testID="report-failed">
               Couldn't send. Check your connection and try again.
@@ -124,9 +109,6 @@ const createStyles = (colors: ThemeColors) => ({
     minHeight: 44,
   },
   rowText: { ...TYPOGRAPHY.body, color: colors.text },
-  switchRow: { marginTop: SPACING.sm, borderTopWidth: 1, borderTopColor: colors.border, paddingTop: SPACING.sm },
-  switchText: { flex: 1, marginRight: SPACING.md },
-  hint: { ...TYPOGRAPHY.bodySmall, color: colors.textMuted },
   error: { ...TYPOGRAPHY.bodySmall, color: colors.error },
   doneRow: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: SPACING.sm, marginBottom: SPACING.md },
   doneText: { ...TYPOGRAPHY.body, color: colors.text, flex: 1 },
