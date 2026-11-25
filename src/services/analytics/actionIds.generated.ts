@@ -282,6 +282,7 @@ export const FIXED_ACTION_IDS: readonly string[] = [
   "kb-paste-first",
   "knowledge-base-back",
   "knowledge-base-screen",
+  "language-reply-toggle",
   "language-system",
   "library-grid",
   "library-new",

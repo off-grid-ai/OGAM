@@ -35,6 +35,7 @@ import { LivePreview } from './LivePreview';
 import { useWhisperStore } from '../../stores';
 import { useMicPermissionDenied } from '../../hooks/useMicPermissionDenied';
 import logger from '../../utils/logger';
+import { quickDictationModelId } from '../../services/quickDictationModel';
 import {
   buildVoiceRecordGesture,
   type VoiceRecordCallbacks,
@@ -43,7 +44,6 @@ import {
 
 export type { VoiceRecordInteractionMode } from './voiceRecordGesture';
 
-const DOWNLOAD_MODEL_ID = 'base.en';
 const DOWNLOAD_MODEL_SIZE_MB = 142;
 
 interface VoiceRecordButtonProps {
@@ -319,7 +319,7 @@ export const VoiceRecordButton: React.FC<VoiceRecordButtonProps> = ({
             text: 'Download',
             onPress: () => {
               setAlertState(hideAlert());
-              downloadModel(DOWNLOAD_MODEL_ID).catch(err => {
+              downloadModel(quickDictationModelId()).catch(err => {
                 logger.error('[VoiceRecordButton] Download failed:', err);
               });
             },

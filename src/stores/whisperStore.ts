@@ -5,6 +5,11 @@ import { transcriptionResidentSizeMB } from '../services/whisperModels';
 import { modelResidencyManager } from '../services/modelResidency';
 import logger from '../utils/logger';
 import { createHydrationGatedStorage } from '../utils/hydrationGatedStorage';
+import { resolveLocale } from '@offgrid/i18n';
+import { transcriptionLanguageFor, transcriptionLanguages } from '@offgrid/speech';
+import { isQwenAsrModelId } from '../services/qwenAsrModel';
+import { useLocaleStore } from './localeStore';
+import { systemLanguages } from '../i18n/appLanguage';
 
 /**
  * Outcome of a whisper load, so callers can tell WHY it didn't load:
@@ -37,8 +42,13 @@ interface WhisperState {
   isModelLoading: boolean;
   isModelLoaded: boolean;
   error: string | null;
-  /** Language passed to every realtime and file transcription. */
+  /** Language passed to every realtime and file transcription. Follows the app language until picked. */
   transcriptionLanguage: string;
+  /**
+   * True once the person picked a language in voice settings. Unset on installs from before speech
+   * followed the app language: there a language other than the old 'en' default was a pick.
+   */
+  transcriptionLanguagePicked?: boolean;
 
   // Actions
   downloadModel: (modelId: string) => Promise<void>;
@@ -53,10 +63,20 @@ interface WhisperState {
   /** Re-probe which models are present on disk. */
   refreshPresentModels: () => Promise<void>;
   clearError: () => void;
+  /** The person's own pick in voice settings: it wins over the app language from now on. */
   setTranscriptionLanguage: (language: string) => void;
+  /** Follow the app language (unless picked) within what the active model accepts. */
+  syncTranscriptionLanguage: () => void;
 }
 
-type PersistedWhisperState = Pick<WhisperState, 'downloadedModelId' | 'transcriptionLanguage'>;
+type PersistedWhisperState = Pick<WhisperState, 'downloadedModelId' | 'transcriptionLanguage' | 'transcriptionLanguagePicked'>;
+
+/** The app language: the Settings → Language pick, else the phone's language, else English. */
+const appLanguageCode = (): string => resolveLocale(systemLanguages(), useLocaleStore.getState().picked).code;
+
+/** The languages the model accepts as a hint. */
+const modelLanguages = (modelId: string | null) =>
+  transcriptionLanguages(isQwenAsrModelId(modelId) ? 'qwen3-asr' : 'whisper', modelId);
 
 type SetState = (partial: Partial<WhisperState> | ((s: WhisperState) => Partial<WhisperState>)) => void;
 
@@ -276,7 +296,18 @@ export const useWhisperStore = create<WhisperState>()(
       },
 
       setTranscriptionLanguage: (transcriptionLanguage: string) => {
-        set({ transcriptionLanguage });
+        set({ transcriptionLanguage, transcriptionLanguagePicked: true });
+      },
+
+      syncTranscriptionLanguage: () => {
+        const { transcriptionLanguage, transcriptionLanguagePicked, downloadedModelId } = get();
+        const picked = transcriptionLanguagePicked ?? transcriptionLanguage !== 'en';
+        const next = transcriptionLanguageFor(
+          appLanguageCode(),
+          modelLanguages(downloadedModelId),
+          picked ? transcriptionLanguage : null,
+        );
+        if (next !== transcriptionLanguage) set({ transcriptionLanguage: next });
       },
     }),
     {
@@ -287,8 +318,17 @@ export const useWhisperStore = create<WhisperState>()(
       partialize: (state): PersistedWhisperState => ({
         downloadedModelId: state.downloadedModelId,
         transcriptionLanguage: state.transcriptionLanguage,
+        transcriptionLanguagePicked: state.transcriptionLanguagePicked,
       }),
     }
   )
 );
 whisperStorage.attach(useWhisperStore);
+
+// Dictation follows the app language: when it changes, when the saved state lands, and when the active
+// model changes what it accepts.
+useLocaleStore.subscribe(() => useWhisperStore.getState().syncTranscriptionLanguage());
+useWhisperStore.persist.onFinishHydration(() => useWhisperStore.getState().syncTranscriptionLanguage());
+useWhisperStore.subscribe((state, previous) => {
+  if (state.downloadedModelId !== previous.downloadedModelId) state.syncTranscriptionLanguage();
+});
