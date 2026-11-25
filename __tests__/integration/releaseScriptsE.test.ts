@@ -169,6 +169,24 @@ it('a re-run attaches the tested builds to the release that already exists', () 
   expect(githubCalls()).not.toContain('release create v0.0.1 ');
 });
 
+// Nothing listens on port 9, so the real notifier tries to post and logs that it did.
+const slack = { SLACK_WEBHOOK_URL: 'http://127.0.0.1:9/' };
+
+it('the run that creates the release announces it in Slack', () => {
+  githubWithTestedBuilds(false);
+  const result = run('promote', ['v0.0.1-beta.1', '--github'], slack);
+  expect(result.status).toBe(0);
+  expect(result.stdout + result.stderr).toContain('[slack-release]');
+});
+
+it('a re-run does not announce the same release in Slack again', () => {
+  githubWithTestedBuilds(true);
+  const result = run('promote', ['v0.0.1-beta.1', '--github'], slack);
+  expect(result.status).toBe(0);
+  expect(result.stdout + result.stderr).not.toContain('[slack-release]');
+  expect(result.stdout).toContain('not posting again');
+});
+
 it('a copy of the script outside the checkout releases the checkout named by PROMOTE_ROOT', () => {
   githubWithTestedBuilds(false);
   const outside = join(root, 'main-script');

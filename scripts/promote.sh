@@ -182,7 +182,11 @@ if [ "$DO_GITHUB" = 1 ]; then
   { printf '## Highlights\n\n'; cat "$STORE_NOTES"
     [ -n "$PREV_RELEASE" ] && printf '\n**Full Changelog**: https://github.com/off-grid-ai/OGAM/compare/%s...v%s\n' "$PREV_RELEASE" "$TARGET_VERSION"
   } > "$NOTES_FILE"
+  # Slack hears about a release once: from the run that creates it. A re-run (to re-attach builds
+  # or refresh notes) must not announce the same version again.
+  ANNOUNCE=1
   if gh release view "v${TARGET_VERSION}" >/dev/null 2>&1; then
+    ANNOUNCE=0
     warn "GitHub release v${TARGET_VERSION} already exists - refreshing its notes (idempotent re-run)."
     gh release edit "v${TARGET_VERSION}" --notes-file "$NOTES_FILE"
     # A re-run also attaches the tested builds, replacing any copy already there.
@@ -200,10 +204,14 @@ if [ "$DO_GITHUB" = 1 ]; then
   # Announce production in Slack, as uat.sh does for a beta. Fail-soft: a chat message must
   # never fail a release. The webhook comes from .env.keygen locally (the SLACK_WEBHOOK_URL secret
   # in CI); notify-slack-release.mjs no-ops without one.
-  SLACK_WEBHOOK_URL="${SLACK_WEBHOOK_URL:-$(sed -n 's/^SLACK_WEBHOOK_URL=//p' "$ROOT_DIR/.env.keygen" 2>/dev/null)}" \
-    PRODUCT="Off Grid AI Mobile" VERSION="$TARGET_VERSION" CHANNEL_LABEL="production" \
-    RELEASE_URL="$(gh release view "v${TARGET_VERSION}" --json url -q .url 2>/dev/null)" NOTES_FILE="$NOTES_FILE" \
-    node "$ROOT_DIR/scripts/notify-slack-release.mjs" || true
+  if [ "$ANNOUNCE" = 1 ]; then
+    SLACK_WEBHOOK_URL="${SLACK_WEBHOOK_URL:-$(sed -n 's/^SLACK_WEBHOOK_URL=//p' "$ROOT_DIR/.env.keygen" 2>/dev/null)}" \
+      PRODUCT="Off Grid AI Mobile" VERSION="$TARGET_VERSION" CHANNEL_LABEL="production" \
+      RELEASE_URL="$(gh release view "v${TARGET_VERSION}" --json url -q .url 2>/dev/null)" NOTES_FILE="$NOTES_FILE" \
+      node "$ROOT_DIR/scripts/notify-slack-release.mjs" || true
+  else
+    info "Slack already announced v${TARGET_VERSION} when it was created; not posting again."
+  fi
   rm -f "$NOTES_FILE"
 fi
 
