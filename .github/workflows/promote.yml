@@ -43,6 +43,8 @@ jobs:
         run: |
           git checkout -- .bundle/config Gemfile.lock 2>/dev/null || true
           mkdir -p "$RUNNER_TEMP/notes" && cp release-notes/* "$RUNNER_TEMP/notes/"
+          # main's release script, so a fix to it applies to a beta cut before the fix.
+          cp scripts/promote.sh "$RUNNER_TEMP/promote.sh"
           git fetch --tags --quiet origin
           git checkout --quiet "${{ inputs.beta_tag }}"
           for f in "$RUNNER_TEMP"/notes/*; do
@@ -70,4 +72,4 @@ jobs:
           git config user.name  "offgrid-ci"
           git config user.email "ci@offgridmobile.ai"
           ARG=""; [ "${{ inputs.platform }}" != "all" ] && ARG="--${{ inputs.platform }}"
-          bash scripts/promote.sh "${{ inputs.beta_tag }}" $ARG
+          PROMOTE_ROOT="$GITHUB_WORKSPACE" bash "$RUNNER_TEMP/promote.sh" "${{ inputs.beta_tag }}" $ARG

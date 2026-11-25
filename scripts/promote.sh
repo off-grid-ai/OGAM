@@ -31,7 +31,9 @@ set -euo pipefail
 # The tested beta commit must be an ancestor of origin/main. Promotion pushes only
 # the release tag; main may have advanced since the beta was tested.
 
-ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+# PROMOTE_ROOT: the checkout to release from, when this script runs from elsewhere (CI runs main's
+# script against the tested commit's checkout).
+ROOT_DIR="${PROMOTE_ROOT:-$(cd "$(dirname "$0")/.." && pwd)}"
 cd "$ROOT_DIR"
 
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; BOLD='\033[1m'; NC='\033[0m'
