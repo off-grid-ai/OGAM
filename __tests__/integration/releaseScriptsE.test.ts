@@ -129,6 +129,54 @@ it('refuses store notes that are a commit list, and tags nothing', () => {
   expect(git(join(root, 'mobile-origin.git'), 'tag', '-l', 'v0.0.1')).toBe('');
 });
 
+/**
+ * GitHub is the store boundary: the beta prerelease holds the tested APK, AAB and IPA, and
+ * `release view` answers whether v<version> already exists.
+ */
+function githubWithTestedBuilds(releaseExists: boolean) {
+  writeFileSync(join(root, 'bin', 'gh'), `#!/bin/sh
+echo "$*" >> "${join(root, 'gh-calls.log')}"
+if [ "$2" = download ]; then
+  for ext in apk aab ipa; do echo "$ext" > "$5/OffgridMobile-0.0.1-beta.1.$ext"; done
+  exit 0
+fi
+if [ "$2" = view ] && [ "$3" = v0.0.1 ]; then ${releaseExists ? 'exit 0' : 'exit 1'}; fi
+exit 0
+`, { mode: 0o755 });
+  git(mobile, 'tag', '-a', 'v0.0.1-beta.1', '-m', 'Beta\n\nBuild: 100');
+  git(mobile, 'push', '--tags', 'origin', 'main');
+}
+
+const githubCalls = () => readFileSync(join(root, 'gh-calls.log'), 'utf8');
+const testedBuilds = /OffgridMobile-0\.0\.1-beta\.1\.aab .*OffgridMobile-0\.0\.1-beta\.1\.apk .*OffgridMobile-0\.0\.1-beta\.1\.ipa/;
+
+it('the GitHub release carries the tested APK, AAB and IPA, and a GitHub-only run ends in success', () => {
+  githubWithTestedBuilds(false);
+  const result = run('promote', ['v0.0.1-beta.1', '--github']);
+  expect(result.status).toBe(0);
+  const create = githubCalls().split('\n').find(line => line.startsWith('release create v0.0.1 '));
+  expect(create).toMatch(testedBuilds);
+  expect(create).toContain('--latest');
+});
+
+it('a re-run attaches the tested builds to the release that already exists', () => {
+  githubWithTestedBuilds(true);
+  const result = run('promote', ['v0.0.1-beta.1', '--github']);
+  expect(result.status).toBe(0);
+  const upload = githubCalls().split('\n').find(line => line.startsWith('release upload v0.0.1 '));
+  expect(upload).toMatch(testedBuilds);
+  expect(upload).toContain('--clobber');
+  expect(githubCalls()).not.toContain('release create v0.0.1 ');
+});
+
+it('an Android-only run ends in success after naming its one manual step', () => {
+  githubWithTestedBuilds(false);
+  const result = run('promote', ['v0.0.1-beta.1', '--android']);
+  expect(result.status).toBe(0);
+  expect(result.stdout).toContain('Play Console');
+  expect(result.stdout).not.toContain('App Store Connect');
+});
+
 it('M3: refuses a clean local commit ahead of origin/main', () => {
   save(mobile, 'unreleased.txt', 'Unreleased work');
   const result = run('uat', ['--ios']);
