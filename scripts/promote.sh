@@ -15,7 +15,7 @@ set -euo pipefail
 #              PINNED to the tested versionCode recovered from the beta tag.
 #   * iOS:     fastlane ios promote - attaches the EXACT tested TestFlight build (pinned
 #              by build_number) to a new App Store version (no binary upload).
-#   * GitHub:  download the APK from the beta prerelease and re-attach it to a fresh
+#   * GitHub:  download the APK, AAB and IPA from the beta prerelease and attach them to a fresh
 #              v<version> full release (not prerelease, marked latest). No rebuild.
 #
 # The tested store build id (Android versionCode / iOS CURRENT_PROJECT_VERSION) is the
@@ -161,16 +161,15 @@ if [ "$DO_IOS" = 1 ]; then
   info "App Store done - open App Store Connect and hit Submit for Review."
 fi
 
-# ── 4. GitHub: cut a clean v<version> full release from the tested APK ──
+# ── 4. GitHub: cut a clean v<version> full release from the tested builds ──
 if [ "$DO_GITHUB" = 1 ]; then
-  info "GitHub: cutting v${TARGET_VERSION} from the tested ${BETA_TAG} APK (no rebuild)…"
+  info "GitHub: cutting v${TARGET_VERSION} from the tested ${BETA_TAG} builds (no rebuild)…"
   TMP_ASSETS="$(mktemp -d)"
   trap 'rm -rf "$TMP_ASSETS"' EXIT
-  # Reuse the tested bytes: download the APK attached to the beta prerelease.
-  if gh release download "$BETA_TAG" -D "$TMP_ASSETS" --pattern "*.apk" 2>/dev/null; then
-    APK=$(find "$TMP_ASSETS" -name "*.apk" | head -1)
-  else
-    APK=""
+  # Reuse the tested bytes: every build the beta prerelease carries (the APK, the AAB and the IPA).
+  ASSETS=()
+  if gh release download "$BETA_TAG" -D "$TMP_ASSETS" --pattern "*.apk" --pattern "*.aab" --pattern "*.ipa" 2>/dev/null; then
+    while IFS= read -r asset; do ASSETS+=("$asset"); done < <(find "$TMP_ASSETS" -type f \( -name "*.apk" -o -name "*.aab" -o -name "*.ipa" \) | sort)
   fi
   # A template ending in XXXXXX: GNU mktemp (Linux CI) rejects `-t name` without one. mktemp returns a REAL path; appending ".md" would orphan that file and misdirect the
   # `rm -f "$NOTES_FILE"` cleanup. Use the path mktemp actually created.
@@ -184,11 +183,16 @@ if [ "$DO_GITHUB" = 1 ]; then
   if gh release view "v${TARGET_VERSION}" >/dev/null 2>&1; then
     warn "GitHub release v${TARGET_VERSION} already exists - refreshing its notes (idempotent re-run)."
     gh release edit "v${TARGET_VERSION}" --notes-file "$NOTES_FILE"
-  elif [ -n "$APK" ]; then
-    gh release create "v${TARGET_VERSION}" "$APK" --title "Off Grid ${TARGET_VERSION}" --notes-file "$NOTES_FILE" --latest
-    info "Cut GitHub release v${TARGET_VERSION} with the tested APK."
+    # A re-run also attaches the tested builds, replacing any copy already there.
+    if [ "${#ASSETS[@]}" -gt 0 ]; then
+      gh release upload "v${TARGET_VERSION}" "${ASSETS[@]}" --clobber
+      info "Attached the tested builds to v${TARGET_VERSION}: $(for a in "${ASSETS[@]}"; do basename "$a"; done | tr '\n' ' ')"
+    fi
+  elif [ "${#ASSETS[@]}" -gt 0 ]; then
+    gh release create "v${TARGET_VERSION}" "${ASSETS[@]}" --title "Off Grid ${TARGET_VERSION}" --notes-file "$NOTES_FILE" --latest
+    info "Cut GitHub release v${TARGET_VERSION} with the tested builds: $(for a in "${ASSETS[@]}"; do basename "$a"; done | tr '\n' ' ')"
   else
-    warn "No APK found on ${BETA_TAG} - creating the release without a binary (attach manually or run the iOS AltStore workflow)."
+    warn "No builds found on ${BETA_TAG} - creating the release without a binary (attach manually or run the iOS AltStore workflow)."
     gh release create "v${TARGET_VERSION}" --title "Off Grid ${TARGET_VERSION}" --notes-file "$NOTES_FILE" --latest
   fi
   # Announce production in Slack, as uat.sh does for a beta. Fail-soft: a chat message must
@@ -203,5 +207,6 @@ fi
 
 echo ""
 info "${BOLD}Promotion staged for ${TARGET_VERSION}.${NC} Remaining MANUAL gates:"
-[ "$DO_ANDROID" = 1 ] && echo "  • Play Console  → Production → confirm rollout %"
-[ "$DO_IOS" = 1 ]     && echo "  • App Store Connect → Submit for Review"
+# if, not `[ ] && echo`: a store left out of this run would make the script's last status 1.
+if [ "$DO_ANDROID" = 1 ]; then echo "  • Play Console  → Production → confirm rollout %"; fi
+if [ "$DO_IOS" = 1 ]; then echo "  • App Store Connect → Submit for Review"; fi
