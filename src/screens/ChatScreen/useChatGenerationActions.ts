@@ -1,4 +1,4 @@
-import { t } from '@offgrid/i18n';
+import { activeLocale, t } from '@offgrid/i18n';
 import { modelReadiness } from '@offgrid/features';
 import { readinessAlert } from './readinessAlert';
 import { videoSeam } from '../../bootstrap/videoSeam';
@@ -68,7 +68,8 @@ import {
 import { useDocumentTurnStatusStore } from '../../services/documents/progressStore';
 import { shownMessages } from '../../utils/chatThread';
 import { hasSearchableKnowledge, toolsForTurn } from '../../services/documents/searchableKnowledge';
-import { resolveChatSystemPrompt } from '../../utils/systemPrompt';
+import { resolveSystemPrompt, withReplyLanguage } from '../../utils/systemPrompt';
+import { useLocaleStore } from '../../stores/localeStore';
 type SetState<T> = Dispatch<SetStateAction<T>>;
 const FALLBACK_RECENT_MESSAGE_COUNT = 2;
 
@@ -769,7 +770,12 @@ function resolveToolsAndPrompt(
   // The user enables KB search explicitly when they want it.
   const enabledTools = canUseTools ? deps.settings.enabledTools || [] : [];
 
-  const rawPrompt = resolveChatSystemPrompt(project?.systemPrompt, deps.settings.systemPrompt);
+  // The reply-language line goes on when the person turned "Reply in my language" on.
+  const rawPrompt = withReplyLanguage(
+    resolveSystemPrompt(project?.systemPrompt, deps.settings.systemPrompt),
+    activeLocale().code,
+    useLocaleStore.getState().replyInLanguage,
+  );
   return { enabledTools, rawPrompt, localToolSupport };
 }
 export async function startGenerationFn(

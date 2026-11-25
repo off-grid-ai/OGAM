@@ -1,6 +1,5 @@
-import { activeLocale, replyLanguageLine } from '@offgrid/i18n';
+import { replyLanguageLine } from '@offgrid/i18n';
 import { APP_CONFIG, PREVIOUS_DEFAULT_SYSTEM_PROMPTS } from '../constants';
-import { useLocaleStore } from '../stores/localeStore';
 
 const hasText = (prompt: string | undefined | null): prompt is string => !!prompt?.trim();
 
@@ -28,6 +27,3 @@ export const withReplyLanguage = (prompt: string, appLanguage: string, replyInLa
   return line ? `${prompt}\n\n${line}` : prompt;
 };
 
-/** The prompt a chat turn sends: resolveSystemPrompt, plus the reply-language line when it is on. */
-export const resolveChatSystemPrompt = (...prompts: Array<string | undefined | null>): string =>
-  withReplyLanguage(resolveSystemPrompt(...prompts), activeLocale().code, useLocaleStore.getState().replyInLanguage);
