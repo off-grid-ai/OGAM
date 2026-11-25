@@ -169,6 +169,19 @@ it('a re-run attaches the tested builds to the release that already exists', () 
   expect(githubCalls()).not.toContain('release create v0.0.1 ');
 });
 
+it('a copy of the script outside the checkout releases the checkout named by PROMOTE_ROOT', () => {
+  githubWithTestedBuilds(false);
+  const outside = join(root, 'main-script');
+  mkdirSync(outside);
+  cpSync(join(mobile, 'scripts/promote.sh'), join(outside, 'promote.sh'));
+  const result = spawnSync('bash', [join(outside, 'promote.sh'), 'v0.0.1-beta.1', '--github'], {
+    cwd: outside, env: { ...env, PROMOTE_ROOT: mobile }, encoding: 'utf8',
+  });
+  expect(result.status).toBe(0);
+  expect(git(join(root, 'mobile-origin.git'), 'tag', '-l', 'v0.0.1')).toBe('v0.0.1');
+  expect(githubCalls()).toMatch(testedBuilds);
+});
+
 it('an Android-only run ends in success after naming its one manual step', () => {
   githubWithTestedBuilds(false);
   const result = run('promote', ['v0.0.1-beta.1', '--android']);
