@@ -1,6 +1,6 @@
 # Indian languages in the apps: plan
 
-Status: plan only. No code until Mac says build.
+Status: building the 11 left-to-right languages. Urdu is parked (see "Decided calls").
 Date: 25 Nov 2026.
 
 ## In short
@@ -123,3 +123,11 @@ The extension is out of scope (the task names mobile and desktop). It can add th
 - **C2. Who checks the drafts?** Recommendation: one native speaker per language, from the Wednesday team where we have one, else a paid reviewer; the translate editor is open to the community too.
 - **C3. Digits.** Recommendation: Latin digits (0–9) in all 12.
 - **C4. Urdu font on Android.** Recommendation: bundle Noto Nastaliq Urdu (about 1 MB).
+
+## Decided calls (Mac, 25 Nov 2026)
+
+- **Urdu: not now.** Mac: Urdu right-to-left "feels wrong, at least right now. So right now don't do that." Decision: no RTL work and no Urdu locale. Section 3 and the Urdu font (C4) wait. The 11 left-to-right languages ship.
+- **The 11 ship together**, in one release (as decided call C1 of the first plan).
+- **Drafts.** Mac: Claude writes them in the chat (no API script). A native speaker checks each language before release (C2).
+- **Digits.** Latin 0–9 in all languages (C3).
+- **Picker.** The 11 join the one list, after the current 12, each in its own script. No group header for now (it adds no new string).
