@@ -1,6 +1,5 @@
-import { Linking, Platform } from 'react-native';
 import InAppReview from 'react-native-in-app-review';
-import { getInstallerPackageName } from 'react-native-device-info';
+import { openStoreListing, ratingStore } from './ratingStore';
 
 // Star button (Settings) points at the mobile repo specifically.
 const GITHUB_URL = 'https://github.com/off-grid-ai/mobile';
@@ -9,43 +8,12 @@ const FOLLOW_X_URL = 'https://x.com/alichherawalla';
 const SLACK_INVITE_URL =
   'https://join.slack.com/t/off-grid-mobile/shared_invite/zt-494gbuv5c-kj9tT7U0AS8Kq8UUO63_jw';
 
-// Ratings live where the store ranks us, and each store only counts its own.
-// iOS: the numeric App Store id, with action=write-review so the review sheet is
-// already open on arrival rather than the listing.
-// Android: market:// opens the Play app directly; the https form is the fallback
-// for a device with no Play app (or a simulator), where market:// has no handler.
-const APP_STORE_REVIEW_URL =
-  'https://apps.apple.com/app/id6759299882?action=write-review';
-const PLAY_PACKAGE = 'ai.offgridmobile';
-const PLAY_MARKET_URL = `market://details?id=${PLAY_PACKAGE}`;
-const PLAY_WEB_URL = `https://play.google.com/store/apps/details?id=${PLAY_PACKAGE}`;
-
 /**
- * Open this platform's store review page - App Store on iOS, Play Store on Android.
- *
- * A rating only counts on the store the user installed from, so the destination follows the
- * platform rather than being one shared link.
+ * Open the review page of the store that installed the app (see ratingStore): a rating only counts
+ * on that store.
  */
 export async function rateOnStore(): Promise<void> {
-  if (Platform.OS === 'ios') {
-    await Linking.openURL(APP_STORE_REVIEW_URL);
-    return;
-  }
-  // canOpenURL rather than assuming: a device without the Play app (or an emulator image with no
-  // Play services) has no market:// handler, and openURL would simply reject.
-  const canOpenPlayApp = await Linking.canOpenURL(PLAY_MARKET_URL).catch(() => false);
-  await Linking.openURL(canOpenPlayApp ? PLAY_MARKET_URL : PLAY_WEB_URL);
-}
-
-// Play's in-app review only shows for a build Play installed. Any other install source (adb, a
-// sideloaded APK, another store) gets a silent no-op from Play, so it goes to the store link instead.
-const PLAY_INSTALLER = 'com.android.vending';
-
-async function nativeReviewAvailable(): Promise<boolean> {
-  if (!InAppReview.isAvailable()) return false;
-  if (Platform.OS !== 'android') return true;
-  const installer = await getInstallerPackageName().catch(() => '');
-  return installer === PLAY_INSTALLER;
+  await openStoreListing(await ratingStore());
 }
 
 /** How a rating ask was answered: the store's own dialog, or the store page as a fallback. */
@@ -55,11 +23,13 @@ export type ReviewRoute = 'native' | 'store_link';
  * Ask for a rating with the store's own dialog: SKStoreReviewController on iOS, the Play In-App
  * Review API on Android. The person rates without leaving the app.
  *
- * Falls back to `rateOnStore()` when the dialog cannot show: no native module, a non-Play install
- * on Android, or the request itself failing.
+ * Falls back to the installing store's page when the dialog cannot show: no native module, an install
+ * Play did not make, or the request itself failing.
  */
 export async function requestStoreReview(): Promise<ReviewRoute> {
-  if (await nativeReviewAvailable()) {
+  const store = await ratingStore();
+  // The dialog is the App Store's or Play's own; Play's shows only for a build Play installed.
+  if (store.nativeReview && InAppReview.isAvailable()) {
     try {
       await InAppReview.RequestInAppReview();
       return 'native';
@@ -67,7 +37,7 @@ export async function requestStoreReview(): Promise<ReviewRoute> {
       // Fall through to the store page.
     }
   }
-  await rateOnStore();
+  await openStoreListing(store);
   return 'store_link';
 }
 
