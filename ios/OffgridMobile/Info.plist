@@ -13,6 +13,24 @@
 	<true/>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>en</string>
+	<!-- The app languages (@offgrid/i18n LOCALES). Without this list iOS hands the app English, so a phone set to
+	     Spanish opened the app in English; Intl then reports the phone's language and the catalog follows it. -->
+	<key>CFBundleLocalizations</key>
+	<array>
+		<string>en</string>
+		<string>de</string>
+		<string>es</string>
+		<string>fr</string>
+		<string>it</string>
+		<string>nl</string>
+		<string>pl</string>
+		<string>pt</string>
+		<string>tr</string>
+		<string>id</string>
+		<string>ru</string>
+		<string>ja</string>
+		<string>zh-Hans</string>
+	</array>
 	<key>CFBundleDisplayName</key>
 	<string>$(INFOPLIST_KEY_CFBundleDisplayName)</string>
 	<key>CFBundleExecutable</key>

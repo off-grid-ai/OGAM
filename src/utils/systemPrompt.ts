@@ -1,3 +1,4 @@
+import { replyLanguageLine } from '@offgrid/i18n';
 import { APP_CONFIG, PREVIOUS_DEFAULT_SYSTEM_PROMPTS } from '../constants';
 
 const hasText = (prompt: string | undefined | null): prompt is string => !!prompt?.trim();
@@ -19,3 +20,10 @@ export const resolveSystemPrompt = (...prompts: Array<string | undefined | null>
 
 export const isBuiltInPrompt = (prompt: string | undefined | null): boolean =>
   !hasText(prompt) || prompt.trim() === APP_CONFIG.defaultSystemPrompt.trim() || isPreviousDefault(prompt);
+
+/** The prompt plus the "Reply in my language" line when the person turned it on for a non-English app. */
+export const withReplyLanguage = (prompt: string, appLanguage: string, replyInLanguage: boolean): string => {
+  const line = replyLanguageLine(appLanguage, replyInLanguage);
+  return line ? `${prompt}\n\n${line}` : prompt;
+};
+

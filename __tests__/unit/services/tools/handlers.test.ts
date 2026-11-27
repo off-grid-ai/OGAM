@@ -12,8 +12,6 @@ import { ToolCall } from '../../../../src/services/tools/types';
 
 const mockedDeviceInfo = DeviceInfo as jest.Mocked<typeof DeviceInfo>;
 
-
-
 // ============================================================================
 // Helpers
 // ============================================================================
@@ -37,7 +35,7 @@ function buildBraveSearchHTML(
 ): string {
   const blocks = results
     .map(
-      (r) =>
+      r =>
         `<div class="result-wrapper">
           <a class="result-header" href="${r.url}">
             <span class="snippet-title">${r.title}</span>
@@ -110,7 +108,9 @@ describe('Tool Handlers', () => {
     });
 
     it('rejects invalid characters (semicolons)', async () => {
-      const result = await runTool('calculator', { expression: '2+2; process.exit()' });
+      const result = await runTool('calculator', {
+        expression: '2+2; process.exit()',
+      });
       expect(result.error).toContain('Invalid expression');
     });
 
@@ -132,7 +132,9 @@ describe('Tool Handlers', () => {
     });
 
     it('handles invalid timezone gracefully (returns fallback)', async () => {
-      const result = await runTool('get_current_datetime', { timezone: 'Invalid/Fake_Zone' });
+      const result = await runTool('get_current_datetime', {
+        timezone: 'Invalid/Fake_Zone',
+      });
       expect(result.content).toContain('invalid');
       expect(result.content).toContain('Invalid/Fake_Zone');
       expect(result.error).toBeUndefined();
@@ -146,10 +148,18 @@ describe('Tool Handlers', () => {
     beforeEach(() => {
       mockedDeviceInfo.getTotalMemory.mockResolvedValue(8 * 1024 * 1024 * 1024);
       mockedDeviceInfo.getUsedMemory.mockResolvedValue(4 * 1024 * 1024 * 1024);
-      mockedDeviceInfo.getFreeDiskStorage.mockResolvedValue(50 * 1024 * 1024 * 1024);
-      (mockedDeviceInfo as any).getTotalDiskCapacity = jest.fn().mockResolvedValue(128 * 1024 * 1024 * 1024);
-      (mockedDeviceInfo as any).getBatteryLevel = jest.fn().mockResolvedValue(0.75);
-      (mockedDeviceInfo as any).isBatteryCharging = jest.fn().mockResolvedValue(false);
+      mockedDeviceInfo.getFreeDiskStorage.mockResolvedValue(
+        50 * 1024 * 1024 * 1024,
+      );
+      (mockedDeviceInfo as any).getTotalDiskCapacity = jest
+        .fn()
+        .mockResolvedValue(128 * 1024 * 1024 * 1024);
+      (mockedDeviceInfo as any).getBatteryLevel = jest
+        .fn()
+        .mockResolvedValue(0.75);
+      (mockedDeviceInfo as any).isBatteryCharging = jest
+        .fn()
+        .mockResolvedValue(false);
       (mockedDeviceInfo as any).getBrand = jest.fn().mockReturnValue('Google');
       mockedDeviceInfo.getModel.mockReturnValue('Pixel 7');
       mockedDeviceInfo.getSystemVersion.mockReturnValue('14');
@@ -216,10 +226,14 @@ describe('Tool Handlers', () => {
 
     it('returns "No results" when HTML has no results', async () => {
       (globalThis as any).fetch = jest.fn().mockResolvedValue({
-        text: jest.fn().mockResolvedValue('<html><body>No matching documents</body></html>'),
+        text: jest
+          .fn()
+          .mockResolvedValue('<html><body>No matching documents</body></html>'),
       });
 
-      const result = await runTool('web_search', { query: 'xyznonexistent12345' });
+      const result = await runTool('web_search', {
+        query: 'xyznonexistent12345',
+      });
 
       expect(result.content).toContain('No results found');
       expect(result.error).toBeUndefined();
@@ -248,17 +262,21 @@ describe('Tool Handlers', () => {
         text: jest.fn().mockResolvedValue(html),
       });
 
-      const result = await runTool('web_search', { query: 'brave exclude test' });
+      const result = await runTool('web_search', {
+        query: 'brave exclude test',
+      });
       expect(result.content).not.toContain('Brave Browser');
       expect(result.content).toContain('Another valid');
     });
 
     it('decodes HTML entities in results', async () => {
-      const html = buildBraveSearchHTML([{
-        title: 'Title &amp; More &#65; &#x42;',
-        url: 'https://example.com',
-        snippet: 'Snippet &lt;b&gt; text &gt;',
-      }]);
+      const html = buildBraveSearchHTML([
+        {
+          title: 'Title &amp; More &#65; &#x42;',
+          url: 'https://example.com',
+          snippet: 'Snippet &lt;b&gt; text &gt;',
+        },
+      ]);
       (globalThis as any).fetch = jest.fn().mockResolvedValue({
         text: jest.fn().mockResolvedValue(html),
       });
@@ -268,11 +286,102 @@ describe('Tool Handlers', () => {
     });
 
     it('handles fetch timeout/error gracefully', async () => {
-      (globalThis as any).fetch = jest.fn().mockRejectedValue(new Error('Network request failed'));
+      (globalThis as any).fetch = jest
+        .fn()
+        .mockRejectedValue(new Error('Network request failed'));
 
       const result = await runTool('web_search', { query: 'test query' });
       expect(result.error).toContain('Network request failed');
       expect(result.content).toBe('');
+    });
+
+    describe('providers in turn', () => {
+      const BING = `<?xml version="1.0"?><rss><channel><title>Bing: q</title>
+        <item><title>Python &amp; asyncio</title><link>https://docs.python.org/asyncio</link><description>Async I/O in &lt;b&gt;Python&lt;/b&gt;.</description></item>
+      </channel></rss>`;
+      const DDG_LITE = `<table><tr><td><a rel="nofollow" href="https://realpython.com/async-io-python/" class='result-link'>Python&#x27;s asyncio</a></td></tr>
+        <tr><td class='result-snippet'>
+          <b>asyncio</b> lets you write concurrent code.
+        </td></tr></table>`;
+      const CAPTCHA =
+        '<html><div class="anomaly-modal">Please complete the captcha</div></html>';
+
+      function answer(
+        byOrigin: Record<string, { status: number; body: string }>,
+      ) {
+        const asked: string[] = [];
+        (globalThis as any).fetch = jest.fn(async (url: string) => {
+          const origin = new URL(url).origin;
+          asked.push(origin);
+          const reply = byOrigin[origin] ?? { status: 503, body: '' };
+          return { status: reply.status, text: async () => reply.body };
+        });
+        return asked;
+      }
+
+      it('reads the results from DuckDuckGo Lite first, asked by POST', async () => {
+        const asked = answer({
+          'https://lite.duckduckgo.com': { status: 200, body: DDG_LITE },
+        });
+
+        const result = await runTool('web_search', { query: 'python asyncio' });
+
+        expect(result.content).toContain(
+          "[Python's asyncio](https://realpython.com/async-io-python/)",
+        );
+        expect(result.content).toContain(
+          'asyncio lets you write concurrent code.',
+        );
+        expect(asked).toEqual(['https://lite.duckduckgo.com']);
+      });
+
+      it('asks Bing when DuckDuckGo refuses', async () => {
+        const asked = answer({
+          'https://lite.duckduckgo.com': { status: 202, body: CAPTCHA },
+          'https://www.bing.com': { status: 200, body: BING },
+        });
+
+        const result = await runTool('web_search', { query: 'python asyncio' });
+
+        expect(result.content).toContain(
+          '[Python & asyncio](https://docs.python.org/asyncio)',
+        );
+        expect(result.content).toContain('Async I/O in Python.');
+        expect(asked).toEqual([
+          'https://lite.duckduckgo.com',
+          'https://www.bing.com',
+        ]);
+      });
+
+      it('passes over Bing results that have nothing to do with the search', async () => {
+        const asked = answer({
+          'https://lite.duckduckgo.com': { status: 202, body: CAPTCHA },
+          'https://www.bing.com': { status: 200, body: BING },
+          'https://search.brave.com': { status: 429, body: CAPTCHA },
+        });
+
+        const result = await runTool('web_search', { query: 'weather mumbai' });
+
+        expect(result.error).toContain('Web search is unavailable right now');
+        expect(asked).toEqual([
+          'https://lite.duckduckgo.com',
+          'https://www.bing.com',
+          'https://search.brave.com',
+        ]);
+      });
+
+      it('takes a bot check as a refusal, not as a page with no results', async () => {
+        answer({
+          'https://lite.duckduckgo.com': { status: 202, body: CAPTCHA },
+          'https://www.bing.com': { status: 503, body: '' },
+          'https://search.brave.com': { status: 429, body: CAPTCHA },
+        });
+
+        const result = await runTool('web_search', { query: 'python asyncio' });
+
+        expect(result.error).toContain('Web search is unavailable right now');
+        expect(result.content).toBe('');
+      });
     });
 
     it.each([
@@ -283,7 +392,6 @@ describe('Tool Handlers', () => {
       const result = await runTool('web_search', args);
       expect(result.error).toContain('Missing required parameter: query');
     });
-
   });
 
   // ==========================================================================
@@ -300,7 +408,11 @@ describe('Tool Handlers', () => {
       (globalThis as any).fetch = jest.fn().mockResolvedValue({
         ok: true,
         status: 200,
-        text: jest.fn().mockResolvedValue('<html><body><p>Hello world content here</p></body></html>'),
+        text: jest
+          .fn()
+          .mockResolvedValue(
+            '<html><body><p>Hello world content here</p></body></html>',
+          ),
       });
 
       const result = await runTool('read_url', { url: 'https://example.com' });
@@ -339,7 +451,9 @@ describe('Tool Handlers', () => {
         statusText: 'Not Found',
       });
 
-      const result = await runTool('read_url', { url: 'https://example.com/missing' });
+      const result = await runTool('read_url', {
+        url: 'https://example.com/missing',
+      });
       expect(result.error).toContain('404');
     });
 
@@ -363,7 +477,9 @@ describe('Tool Handlers', () => {
         text: jest.fn().mockResolvedValue('content here'),
       });
 
-      const result = await runTool('read_url', { url: '"https://example.com"' });
+      const result = await runTool('read_url', {
+        url: '"https://example.com"',
+      });
       expect(result.error).toBeUndefined();
     });
 
@@ -382,12 +498,20 @@ describe('Tool Handlers', () => {
   // ==========================================================================
   describe('Device Info — additional types', () => {
     beforeEach(() => {
-      mockedDeviceInfo.getFreeDiskStorage.mockResolvedValue(50 * 1024 * 1024 * 1024);
-      (mockedDeviceInfo as any).getTotalDiskCapacity = jest.fn().mockResolvedValue(128 * 1024 * 1024 * 1024);
+      mockedDeviceInfo.getFreeDiskStorage.mockResolvedValue(
+        50 * 1024 * 1024 * 1024,
+      );
+      (mockedDeviceInfo as any).getTotalDiskCapacity = jest
+        .fn()
+        .mockResolvedValue(128 * 1024 * 1024 * 1024);
       mockedDeviceInfo.getTotalMemory.mockResolvedValue(8 * 1024 * 1024 * 1024);
       mockedDeviceInfo.getUsedMemory.mockResolvedValue(4 * 1024 * 1024 * 1024);
-      (mockedDeviceInfo as any).getBatteryLevel = jest.fn().mockResolvedValue(0.5);
-      (mockedDeviceInfo as any).isBatteryCharging = jest.fn().mockResolvedValue(true);
+      (mockedDeviceInfo as any).getBatteryLevel = jest
+        .fn()
+        .mockResolvedValue(0.5);
+      (mockedDeviceInfo as any).isBatteryCharging = jest
+        .fn()
+        .mockResolvedValue(true);
     });
 
     it('returns storage info when type is "storage"', async () => {
@@ -403,14 +527,18 @@ describe('Tool Handlers', () => {
     });
 
     it('returns "unavailable" when memory fetch fails', async () => {
-      mockedDeviceInfo.getTotalMemory.mockRejectedValue(new Error('permission denied'));
+      mockedDeviceInfo.getTotalMemory.mockRejectedValue(
+        new Error('permission denied'),
+      );
       const result = await runTool('get_device_info', { info_type: 'memory' });
       expect(result.content).toContain('unavailable');
       expect(result.error).toBeUndefined();
     });
 
     it('returns "unavailable" when storage fetch fails', async () => {
-      (mockedDeviceInfo as any).getTotalDiskCapacity = jest.fn().mockRejectedValue(new Error('fail'));
+      (mockedDeviceInfo as any).getTotalDiskCapacity = jest
+        .fn()
+        .mockRejectedValue(new Error('fail'));
       const result = await runTool('get_device_info', { info_type: 'storage' });
       expect(result.content).toContain('unavailable');
       expect(result.error).toBeUndefined();
@@ -443,9 +571,9 @@ describe('Tool Handlers', () => {
   // ==========================================================================
   describe('read_url — private URL patterns', () => {
     it.each([
-      ['10.x.x.x',         'http://10.0.0.1/api'],     // NOSONAR
-      ['172.16.x.x',       'http://172.16.0.1/api'],   // NOSONAR
-      ['169.254.x.x',      'http://169.254.1.1/meta'],  // NOSONAR
+      ['10.x.x.x', 'http://10.0.0.1/api'], // NOSONAR
+      ['172.16.x.x', 'http://172.16.0.1/api'], // NOSONAR
+      ['169.254.x.x', 'http://169.254.1.1/meta'], // NOSONAR
     ])('blocks %s addresses', async (_label, url) => {
       const result = await runTool('read_url', { url });
       expect(result.error).toContain('Blocked');
@@ -457,7 +585,9 @@ describe('Tool Handlers', () => {
         status: 200,
         text: jest.fn().mockResolvedValue('content'),
       });
-      const result = await runTool('read_url', { url: '<https://example.com>' });
+      const result = await runTool('read_url', {
+        url: '<https://example.com>',
+      });
       expect(result.error).toBeUndefined();
     });
   });
@@ -510,5 +640,4 @@ describe('Tool Handlers', () => {
       expect(result.error).toBeUndefined();
     });
   });
-
 });

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Linking, Platform, Text, View } from 'react-native';
 import { TouchableOpacity } from '../components/Touchable';
 import Icon from 'react-native-vector-icons/Feather';
@@ -11,6 +11,7 @@ import {
   SLACK_INVITE_URL,
   rateOnStore,
 } from '../utils/sharePrompt';
+import { ratingStore, type RatingStoreId } from '../utils/ratingStore';
 import { githubStarTapped } from '../services/analytics/analytics';
 import type { ThemeColors } from '../theme';
 import type { createStyles } from './SettingsScreen.styles';
@@ -31,6 +32,28 @@ type CommunityRow = {
   testID?: string;
 };
 
+/** The rate row names the store the rating goes to; a store without its own line gets the plain ask. */
+function rateTitle(store: RatingStoreId): string {
+  if (store === 'app_store') return 'Rate on the App Store';
+  if (store === 'play') return 'Rate on Google Play';
+  return 'Rate Off Grid AI';
+}
+
+/** The store that installed the app. Android reads it from the system, so it lands a moment later. */
+function useRatingStoreId(): RatingStoreId {
+  const [store, setStore] = useState<RatingStoreId>(Platform.OS === 'ios' ? 'app_store' : 'play');
+  useEffect(() => {
+    let live = true;
+    ratingStore()
+      .then(found => {
+        if (live) setStore(found.id);
+      })
+      .catch(() => undefined);
+    return () => { live = false; };
+  }, []);
+  return store;
+}
+
 /**
  * The community rows of the Settings screen: one labelled group (hand test 64 found two cards,
  * one with its own header paragraph, saying the same kind of thing).
@@ -41,7 +64,7 @@ type CommunityRow = {
 export const SettingsCommunitySections: React.FC<
   SettingsCommunitySectionsProps
 > = ({ focusTrigger, styles, colors, onSendFeedback }) => {
-  const storeName = Platform.OS === 'ios' ? 'Rate on the App Store' : 'Rate on Google Play';
+  const storeName = rateTitle(useRatingStoreId());
   const rows: CommunityRow[] = [
     { key: 'x', icon: <Icon name="at-sign" size={16} color={colors.textSecondary} />, title: 'Follow @alichherawalla on X', desc: 'New features first, promo discounts, the roadmap', onPress: () => Linking.openURL(FOLLOW_X_URL), testID: 'follow-on-x' },
     { key: 'slack', icon: <IconMC name="slack" size={16} color={colors.textSecondary} />, title: 'Join the Slack community', desc: 'Get help fast and try things early', onPress: () => Linking.openURL(SLACK_INVITE_URL), testID: 'join-slack' },

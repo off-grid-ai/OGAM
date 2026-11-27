@@ -1,10 +1,10 @@
-import { t } from '@offgrid/i18n';
+import { activeLocale, t } from '@offgrid/i18n';
 import { modelReadiness } from '@offgrid/features';
 import { readinessAlert } from './readinessAlert';
 import { videoSeam } from '../../bootstrap/videoSeam';
 import { mediaStyle } from '@offgrid/models';
 import { adoptDraftStyles, chatStyleId } from '../../stores/mediaStyleStore';
-import type { MediaStyleIds } from '../../services/generationService';
+import type { MediaStyleIds, QueuedMessage } from '../../services/generationService';
 /* eslint-disable max-lines -- cohesive generation-action orchestrator (send/regenerate/dispatch/route share the same GenerationDeps + session state); splitting it would scatter tightly-coupled turn logic. */
 import { Dispatch, SetStateAction } from 'react';
 import { AlertState, showAlert, hideAlert } from '../../components';
@@ -44,6 +44,7 @@ import {
   useAppStore,
 } from '../../stores';
 import { callHook, HOOKS } from '../../bootstrap/hookRegistry';
+import { voiceSession } from '../../services/voiceSession';
 import {
   DocumentCitation,
   Message,
@@ -68,7 +69,8 @@ import {
 import { useDocumentTurnStatusStore } from '../../services/documents/progressStore';
 import { shownMessages } from '../../utils/chatThread';
 import { hasSearchableKnowledge, toolsForTurn } from '../../services/documents/searchableKnowledge';
-import { resolveSystemPrompt } from '../../utils/systemPrompt';
+import { resolveSystemPrompt, withReplyLanguage } from '../../utils/systemPrompt';
+import { useLocaleStore } from '../../stores/localeStore';
 type SetState<T> = Dispatch<SetStateAction<T>>;
 const FALLBACK_RECENT_MESSAGE_COUNT = 2;
 
@@ -769,7 +771,12 @@ function resolveToolsAndPrompt(
   // The user enables KB search explicitly when they want it.
   const enabledTools = canUseTools ? deps.settings.enabledTools || [] : [];
 
-  const rawPrompt = resolveSystemPrompt(project?.systemPrompt, deps.settings.systemPrompt);
+  // The reply-language line goes on when the person turned "Reply in my language" on.
+  const rawPrompt = withReplyLanguage(
+    resolveSystemPrompt(project?.systemPrompt, deps.settings.systemPrompt),
+    activeLocale().code,
+    useLocaleStore.getState().replyInLanguage,
+  );
   return { enabledTools, rawPrompt, localToolSupport };
 }
 export async function startGenerationFn(
@@ -1078,7 +1085,7 @@ async function dispatchResolvedTurn(
   return { handled: false, messageText };
 }
 
-export type DispatchCall = {
+type DispatchCall = {
   text: string;
   attachments?: MediaAttachment[];
   conversationId: string;
@@ -1093,7 +1100,7 @@ export type DispatchCall = {
  * funnels through here, so the decision is made once and never duplicated in an
  * executor. `startTextGeneration` is the pure text executor (it does not route).
  */
-export async function dispatchGenerationFn(
+async function dispatchGenerationFn(
   deps: GenerationDeps,
   call: DispatchCall,
   startTextGeneration: (
@@ -1162,10 +1169,72 @@ function startConversation(deps: GenerationDeps, modelId: string): string {
   deps.setActiveConversation(conversationId);
   return conversationId;
 }
+/**
+ * A spoken turn hands the floor to the assistant the moment it is captured, and a reply hands it back once
+ * it has been heard. A send that ends with no reply ever ready - no model, a model that would not load, a
+ * picture that failed, an empty answer - had nothing to hand it back, so the mic stayed shut until the
+ * chat was reopened. Phase `transcribing` is the floor as the capture left it: no reply became ready.
+ */
+function releaseVoiceTurnWithoutReply(turn?: number): void {
+  const holder = voiceSession.floorTurn();
+  if (holder === null) return;
+  // A queued question hands back only its own floor: a later spoken turn may be waiting the same way.
+  if (turn !== undefined && holder !== turn) return;
+  logger.log('[TURN] send ended with no reply - handing the floor back');
+  voiceSession.dispatch('replyFinished');
+}
+
+/** The spoken turn a message queued now keeps the floor for, if one is waiting for its reply. */
+function queuedVoiceTurn(): { voiceTurn?: number } {
+  const turn = voiceSession.floorTurn();
+  return turn === null ? {} : { voiceTurn: turn };
+}
+
+/**
+ * Send a queued message as the queue drains it. A spoken question kept the floor while it waited; when
+ * its turn ends with no reply ever ready, that floor goes back, as for a direct send. A reply hands it
+ * back itself once it has been heard.
+ */
+export async function handleQueuedSendFn(
+  deps: GenerationDeps,
+  item: QueuedMessage,
+  startGeneration: (convId: string, text: string, assistantEnabled?: boolean) => Promise<void>,
+): Promise<void> {
+  try {
+    await dispatchGenerationFn(
+      deps,
+      {
+        text: item.text,
+        attachments: item.attachments,
+        conversationId: item.conversationId,
+        imageMode: item.imageMode,
+        assistantEnabled: item.assistantEnabled,
+        styleIds: item.styleIds,
+      },
+      startGeneration,
+    );
+  } finally {
+    if (item.voiceTurn !== undefined) releaseVoiceTurnWithoutReply(item.voiceTurn);
+  }
+}
+
 export async function handleSendFn(
   deps: GenerationDeps,
   call: SendCall,
 ): Promise<void> {
+  let queued = false;
+  try {
+    queued = (await sendTurn(deps, call)) === 'queued';
+  } finally {
+    // A queued turn keeps the floor: its reply comes when the queue drains.
+    if (!queued) releaseVoiceTurnWithoutReply();
+  }
+}
+
+async function sendTurn(
+  deps: GenerationDeps,
+  call: SendCall,
+): Promise<'queued' | 'sent'> {
   const { text, attachments, imageMode = 'auto', assistantEnabled, startGeneration } = call;
   abortPreload(); // user acted — stop background warming so it can't block them
   // The first chat model is still downloading: the message waits in this chat's queue and goes when
@@ -1184,15 +1253,16 @@ export async function handleSendFn(
       assistantEnabled,
       styleIds: { image: chatStyleId(conversationId, 'image'), video: chatStyleId(conversationId, 'video') },
       waitsForModel: true,
+      ...queuedVoiceTurn(),
     });
-    return;
+    return 'queued';
   }
   if (!deps.hasActiveModel) {
     deps.setAlertState(readinessAlert(modelReadiness({ need: 'chat', ready: false }), deps.navigation));
-    return;
+    return 'sent';
   }
   // Vision gate (shared with resend): never send an image to a model that can't do vision.
-  if (blockedImageForNonVisionModel(deps, attachments)) return;
+  if (blockedImageForNonVisionModel(deps, attachments)) return 'sent';
   callHook(HOOKS.audioStop); // stop stale TTS on the new turn (not a streaming-flag effect — see useChatScreen)
   await modelResidencyManager.reclaimSttForGeneration(); // free idle Whisper before LLM+TTS so they don't OOM on tight devices
   const targetConversationId =
@@ -1227,9 +1297,10 @@ export async function handleSendFn(
         image: chatStyleId(targetConversationId, 'image'),
         video: chatStyleId(targetConversationId, 'video'),
       },
+      ...queuedVoiceTurn(),
     });
     if (call.sendNow) await sendQueuedNowFn(deps, queuedId);
-    return;
+    return 'queued';
   }
   await dispatchGenerationFn(
     deps,
@@ -1242,6 +1313,7 @@ export async function handleSendFn(
     },
     startGeneration,
   );
+  return 'sent';
 }
 /**
  * Send one queued message at once: it moves to the front, the running reply (text, image or video) stops,

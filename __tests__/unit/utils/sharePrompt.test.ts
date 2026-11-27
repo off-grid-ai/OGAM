@@ -84,42 +84,50 @@ describe('maybeScheduleSharePrompt — at most once per session', () => {
   });
 });
 
-describe('rateOnStore', () => {
+const PLAY_APP = 'market://details?id=ai.offgridmobile';
+const PLAY_WEB = 'https://play.google.com/store/apps/details?id=ai.offgridmobile';
+const APP_STORE = 'https://apps.apple.com/app/id6759299882?action=write-review';
+const GALAXY_APP = 'samsungapps://ProductDetail/ai.offgridmobile';
+
+describe('rateOnStore - the store that installed the app', () => {
   const openURL = Linking.openURL as jest.Mock;
-  const canOpenURL = Linking.canOpenURL as jest.Mock;
+  const installer = getInstallerPackageName as jest.Mock;
   const originalPlatform = Platform.OS;
+  const setOS = (os: string) => Object.defineProperty(Platform, 'OS', { configurable: true, value: os });
 
   beforeEach(() => {
     openURL.mockReset().mockResolvedValue(undefined);
-    canOpenURL.mockReset().mockResolvedValue(false);
+    installer.mockReset().mockResolvedValue('com.android.vending');
   });
 
-  afterAll(() => {
-    Object.defineProperty(Platform, 'OS', { configurable: true, value: originalPlatform });
-  });
+  afterAll(() => setOS(originalPlatform));
 
   it('opens the App Store review page on iOS', async () => {
-    Object.defineProperty(Platform, 'OS', { configurable: true, value: 'ios' });
+    setOS('ios');
     await rateOnStore();
-    expect(openURL).toHaveBeenCalledWith(
-      'https://apps.apple.com/app/id6759299882?action=write-review',
-    );
-    expect(canOpenURL).not.toHaveBeenCalled();
+    expect(openURL.mock.calls).toEqual([[APP_STORE]]);
   });
 
-  it('opens the Play Store app on Android when it is available', async () => {
-    Object.defineProperty(Platform, 'OS', { configurable: true, value: 'android' });
-    canOpenURL.mockResolvedValue(true);
+  it('opens the Play app for a Play install', async () => {
+    setOS('android');
     await rateOnStore();
-    expect(openURL).toHaveBeenCalledWith('market://details?id=ai.offgridmobile');
+    expect(openURL.mock.calls).toEqual([[PLAY_APP]]);
   });
 
-  it('opens the Play Store web page when the Android app is unavailable', async () => {
-    Object.defineProperty(Platform, 'OS', { configurable: true, value: 'android' });
+  it('opens the Play web page when no app takes the Play link', async () => {
+    setOS('android');
+    openURL.mockImplementation(async (url: string) => {
+      if (url === PLAY_APP) throw new Error('No Activity found');
+    });
     await rateOnStore();
-    expect(openURL).toHaveBeenCalledWith(
-      'https://play.google.com/store/apps/details?id=ai.offgridmobile',
-    );
+    expect(openURL.mock.calls).toEqual([[PLAY_APP], [PLAY_WEB]]);
+  });
+
+  it('opens the Galaxy Store for a Galaxy Store install, never Play', async () => {
+    setOS('android');
+    installer.mockResolvedValue('com.sec.android.app.samsungapps');
+    await rateOnStore();
+    expect(openURL.mock.calls).toEqual([[GALAXY_APP]]);
   });
 });
 
@@ -133,7 +141,6 @@ describe('requestStoreReview - the store\'s own dialog, else the store page', ()
 
   beforeEach(() => {
     openURL.mockReset().mockResolvedValue(undefined);
-    (Linking.canOpenURL as jest.Mock).mockReset().mockResolvedValue(false);
     isAvailable.mockReset().mockReturnValue(true);
     request.mockReset().mockResolvedValue(true);
     installer.mockReset().mockResolvedValue('com.android.vending');
@@ -155,12 +162,20 @@ describe('requestStoreReview - the store\'s own dialog, else the store page', ()
     expect(openURL).not.toHaveBeenCalled();
   });
 
-  it('falls back to the Play page for a sideloaded APK (no Play install source)', async () => {
+  it('falls back to the Play page for a sideloaded APK (no install source)', async () => {
     setOS('android');
     installer.mockResolvedValue('');
     await expect(requestStoreReview()).resolves.toBe('store_link');
     expect(request).not.toHaveBeenCalled();
-    expect(openURL).toHaveBeenCalledWith('https://play.google.com/store/apps/details?id=ai.offgridmobile');
+    expect(openURL.mock.calls).toEqual([[PLAY_APP]]);
+  });
+
+  it('sends a Galaxy Store install to the Galaxy Store, with no Play dialog', async () => {
+    setOS('android');
+    installer.mockResolvedValue('com.sec.android.app.samsungapps');
+    await expect(requestStoreReview()).resolves.toBe('store_link');
+    expect(request).not.toHaveBeenCalled();
+    expect(openURL.mock.calls).toEqual([[GALAXY_APP]]);
   });
 
   it('falls back to the store page when the native dialog is unavailable', async () => {
@@ -168,14 +183,14 @@ describe('requestStoreReview - the store\'s own dialog, else the store page', ()
     isAvailable.mockReturnValue(false);
     await expect(requestStoreReview()).resolves.toBe('store_link');
     expect(request).not.toHaveBeenCalled();
-    expect(openURL).toHaveBeenCalledWith('https://apps.apple.com/app/id6759299882?action=write-review');
+    expect(openURL.mock.calls).toEqual([[APP_STORE]]);
   });
 
   it('falls back to the store page when the native request fails', async () => {
     setOS('android');
     request.mockRejectedValue(new Error('GOOGLE_SERVICES_NOT_AVAILABLE'));
     await expect(requestStoreReview()).resolves.toBe('store_link');
-    expect(openURL).toHaveBeenCalledWith('https://play.google.com/store/apps/details?id=ai.offgridmobile');
+    expect(openURL.mock.calls).toEqual([[PLAY_APP]]);
   });
 });
 

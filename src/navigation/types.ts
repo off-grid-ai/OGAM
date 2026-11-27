@@ -52,6 +52,7 @@ export type RootStackParamList = {
   GuideTopic: { id: string };
   About: undefined;
   Tools: undefined;
+  WebSearchSettings: undefined;
 };
 
 /** What a new chat starts making: pictures or clips. */

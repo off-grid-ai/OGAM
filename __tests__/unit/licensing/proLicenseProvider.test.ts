@@ -157,6 +157,17 @@ describe('the licence this phone holds', () => {
       ).resolves.toEqual({ ok: true });
     });
 
+    it('accepts a key copied with an invisible character and its quotes', async () => {
+      const provider = load();
+      provider.setDirectEntitlementActivationOwner(activationOwner().owner);
+
+      await expect(
+        provider.proLicenseProvider.activate!(
+          `“\uFEFF${LICENCE_KEY.slice(0, 8)}\u200B${LICENCE_KEY.slice(8)}”`,
+        ),
+      ).resolves.toEqual({ ok: true });
+    });
+
     it('refuses an empty key without asking the provider', async () => {
       const provider = load();
 

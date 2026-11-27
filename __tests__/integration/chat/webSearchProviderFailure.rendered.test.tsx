@@ -9,6 +9,7 @@
  * the device boundary: the llama.rn / LiteRT engine (scripted tool call, then reply) and the search provider at
  * fetch (harness/webSearchFake).
  */
+import { WEB_SEARCH_REASONS } from '@offgrid/models';
 import { setupChatScreen } from '../../harness/chatHarness';
 import { installWebSearchFake, type WebSearchFake } from '../../harness/webSearchFake';
 
@@ -22,6 +23,9 @@ describe('web search provider failure in a chat turn', () => {
   let search: WebSearchFake | undefined;
 
   afterEach(() => search?.restore());
+
+  // A refusal reads as one, in words the apps translate; any other failure keeps its HTTP status.
+  const reasonFor = (status: number): string => (status === 403 ? WEB_SEARCH_REASONS.refused : `HTTP ${status}`);
 
   it.each([
     ['llama', 403],
@@ -66,7 +70,7 @@ describe('web search provider failure in a chat turn', () => {
     h.rtl.fireEvent.press(h.view!.getByTestId('tool-result-accordion-web_search'));
 
     await h.rtl.waitFor(() =>
-      expect(h.view!.getByText(new RegExp(`Web search is unavailable right now \\(HTTP ${status}\\)`))).toBeTruthy(),
+      expect(h.view!.getByText(`Web search is unavailable right now (${reasonFor(status)})`, { exact: false })).toBeTruthy(),
     );
     expect(h.view!.queryByText(/No results found/i)).toBeNull();
   });

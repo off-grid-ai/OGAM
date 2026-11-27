@@ -16,13 +16,20 @@
  */
 
 // ── Native llama.rn mockRuntime — a dumb, controllable context stub ─────────────
-type CompletionArgs = { prompt: string; grammar: unknown; guide_tokens?: number[] };
+type CompletionArgs = {
+  prompt: string;
+  grammar: unknown;
+  n_predict?: number;
+  speaker?: unknown;
+  guide_tokens?: number[];
+};
 interface MockCtx {
   released: boolean;
   vocoderReleased: boolean;
   initVocoder: jest.Mock;
   isVocoderEnabled: jest.Mock;
   getFormattedAudioCompletion: jest.Mock;
+  getTTSCapabilities: jest.Mock;
   completion: jest.Mock;
   decodeAudioTokens: jest.Mock;
   releaseVocoder: jest.Mock;
@@ -46,8 +53,22 @@ function mockMakeContext(): MockCtx {
     isVocoderEnabled: jest.fn(() => Promise.resolve(mockRuntime.vocoderEnabled)),
     // llama.rn 0.13 takes ONE options object here. The double follows the runtime we ship, or it proves
     // the engine against an API that no longer exists.
+    // codec.cpp reports the model's own sampling and constraints as completionParams.
     getFormattedAudioCompletion: jest.fn(({ prompt: text }: { prompt: string }) =>
-      Promise.resolve({ prompt: `PROMPT:${text}`, grammar: 'G' }),
+      Promise.resolve({
+        prompt: `PROMPT:${text}`,
+        grammar: 'G',
+        completionParams: { prompt: `PROMPT:${text}`, grammar: 'G', n_predict: 1200 },
+      }),
+    ),
+    // The codec file carries OuteTTS 0.3's built-in voices.
+    getTTSCapabilities: jest.fn(() =>
+      Promise.resolve({
+        builtinVoices: [
+          { name: 'en-female-1', refText: '', isDefault: false },
+          { name: 'en-male-1', refText: '', isDefault: true },
+        ],
+      }),
     ),
     completion: jest.fn((args: CompletionArgs) => {
       mockRuntime.completionArgs = args;
@@ -192,7 +213,16 @@ describe('OuteTTSEngine — initialize lifecycle', () => {
     await e.initialize();
     expect(phases).toEqual(['loading', 'ready']);
     expect(e.getPhase()).toBe('ready');
-    expect(mockRuntime.lastContext?.initVocoder).toHaveBeenCalledWith({ path: vocoderPath, n_batch: 4096 });
+    // Android runs the voice model on the CPU only: the GPU driver killed the app mid-speech.
+    const android = require('react-native').Platform.OS === 'android';
+    expect(mockRuntime.lastContext?.initVocoder).toHaveBeenCalledWith({
+      path: vocoderPath,
+      n_batch: 4096,
+      use_gpu: !android,
+    });
+    const loaded = require('llama.rn').initLlama.mock.calls.at(-1)[0];
+    if (android) expect(loaded).toMatchObject({ devices: ['CPU'], n_gpu_layers: 0 });
+    else expect(loaded.devices).toBeUndefined();
   });
 
   it('is idempotent — a second initialize() does not reload the context', async () => {
@@ -307,13 +337,18 @@ describe('OuteTTSEngine — speak', () => {
     expect(e.getPhase()).toBe('ready');
   });
 
-  it('forwards the runtime\'s formatted prompt into completion(), and no guide tokens', async () => {
-    // llama.rn 0.13 removed `getAudioCompletionGuideTokens` AND the `guide_tokens` completion param:
-    // native owns them now, carried by the grammar the formatted completion returns. Sending our own
-    // would be this engine deciding something the runtime already decided.
+  it('runs the runtime\'s completion params with the codec\'s default voice, and no guide tokens', async () => {
+    // llama.rn 0.13 decodes through codec.cpp: the formatted completion carries the model's sampling
+    // and constraints, and the codec's built-in voice speaks. Sending our own would be this engine
+    // deciding something the runtime already decided.
     const e = await readyEngine();
     await e.speak('the quick brown fox');
     expect(mockRuntime.completionArgs?.prompt).toBe('PROMPT:the quick brown fox');
+    expect(mockRuntime.completionArgs?.n_predict).toBe(1200);
+    expect(mockRuntime.completionArgs?.speaker).toBe('en-male-1');
+    expect(
+      mockRuntime.lastContext!.getFormattedAudioCompletion.mock.calls[0][0],
+    ).toMatchObject({ speaker: 'en-male-1' });
     expect(mockRuntime.completionArgs?.guide_tokens).toBeUndefined();
   });
 
@@ -481,6 +516,14 @@ describe('OuteTTSEngine — stop / pause / resume phase logic', () => {
 });
 
 describe('OuteTTSEngine — assets & progress', () => {
+  it('reads one file left on disk as not downloaded, not as a download stuck part-way', async () => {
+    const e = new OuteTTSEngine();
+    defaultNativeFileSystemBoundary.seedFile(backbonePath, OUTETTS_BACKBONE.sizeBytes);
+    await e.checkAssetStatus();
+    expect(e.isFullyDownloaded()).toBe(false);
+    expect(e.getOverallDownloadProgress()).toBe(0);
+  });
+
   it('reports overall download progress weighted by asset size', async () => {
     const e = new OuteTTSEngine();
     // Nothing downloaded yet.

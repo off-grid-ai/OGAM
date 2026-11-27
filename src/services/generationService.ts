@@ -70,6 +70,9 @@ export interface QueuedMessage {
   styleIds?: MediaStyleIds;
   /** Sent while the first chat model was still downloading: it goes once a chat model is chosen. */
   waitsForModel?: boolean;
+  /** A spoken question that holds the voice floor while it waits (voiceSession.floorTurn()): its drain
+   *  hands that floor back when no reply comes. */
+  voiceTurn?: number;
 }
 
 /**
@@ -734,6 +737,8 @@ class GenerationService {
       assistantEnabled: all.some(m => m.assistantEnabled),
       // The styles of the latest send: the merged turn is made once, with the choice the person made last.
       styleIds: all[all.length - 1].styleIds,
+      // The newest spoken turn among them: an older one's floor was already handed on before it.
+      voiceTurn: [...all].reverse().find(m => m.voiceTurn !== undefined)?.voiceTurn,
       now: false,
     };
     this.sendingQueuedTurn = true;

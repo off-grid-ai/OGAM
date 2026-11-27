@@ -12,6 +12,7 @@ import { SPACING, TYPOGRAPHY } from '../constants';
 import { cardSurface } from '../theme/surface';
 import { useLocaleStore } from '../stores/localeStore';
 import { systemLanguages } from '../i18n/appLanguage';
+import { AppSwitch } from '../components/AppSwitch';
 
 interface RowProps {
   title: string;
@@ -50,6 +51,8 @@ export const LanguageScreen: React.FC = () => {
   const styles = useThemedStyles(createStyles);
   const picked = useLocaleStore(s => s.picked);
   const setPicked = useLocaleStore(s => s.setPicked);
+  const replyInLanguage = useLocaleStore(s => s.replyInLanguage);
+  const setReplyInLanguage = useLocaleStore(s => s.setReplyInLanguage);
   const phone = resolveLocale(systemLanguages());
 
   return (
@@ -82,6 +85,21 @@ export const LanguageScreen: React.FC = () => {
             />
           ))}
         </View>
+        {/* Opt-in: off, the model answers in the language the person writes in. */}
+        <View style={[styles.group, styles.replyGroup]}>
+          <View style={styles.row}>
+            <View style={styles.rowText}>
+              <Text style={styles.rowTitle}>Reply in my language</Text>
+              <Text style={styles.rowSubtitle}>The AI answers in the app language unless you write in another language.</Text>
+            </View>
+            <AppSwitch
+              testID="language-reply-toggle"
+              accessibilityLabel="Reply in my language"
+              value={replyInLanguage}
+              onValueChange={setReplyInLanguage}
+            />
+          </View>
+        </View>
       </ScrollView>
     </AliveScreen>
   );
@@ -98,6 +116,7 @@ const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
     paddingHorizontal: SPACING.lg,
     paddingVertical: SPACING.md,
   },
+  replyGroup: { marginTop: SPACING.lg },
   rowDivided: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.borderLight },
   rowText: { flex: 1 },
   rowTitle: { ...TYPOGRAPHY.body, color: colors.text },

@@ -19,8 +19,8 @@ import type { GenerationState } from '../../services/generationService';
 import { generationSession } from '../../services/generationSession';
 import type { RootStackParamList } from '../../navigation/types';
 import {
-  dispatchGenerationFn,
   GenerationDeps,
+  handleQueuedSendFn,
 } from './useChatGenerationActions';
 
 type StartGeneration = (
@@ -113,18 +113,7 @@ export function useChatRuntimeSubscriptions(
   const handleQueuedSend = useCallback(
     async (item: QueuedMessage) => {
       if (!generationDepsRef.current || !startGenerationRef.current) return;
-      await dispatchGenerationFn(
-        generationDepsRef.current,
-        {
-          text: item.text,
-          attachments: item.attachments,
-          conversationId: item.conversationId,
-          imageMode: item.imageMode,
-          assistantEnabled: item.assistantEnabled,
-          styleIds: item.styleIds,
-        },
-        startGenerationRef.current,
-      );
+      await handleQueuedSendFn(generationDepsRef.current, item, startGenerationRef.current);
     },
     [generationDepsRef, startGenerationRef],
   );

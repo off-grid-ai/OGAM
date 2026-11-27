@@ -16,6 +16,7 @@ export const TranscriptionLanguageSelect: React.FC<TranscriptionLanguageSelectPr
   const downloadedModelId = useWhisperStore((state) => state.downloadedModelId);
   const language = useWhisperStore((state) => state.transcriptionLanguage);
   const setLanguage = useWhisperStore((state) => state.setTranscriptionLanguage);
+  const syncLanguage = useWhisperStore((state) => state.syncTranscriptionLanguage);
   const languages = useMemo(
     () => transcriptionLanguages(isQwenAsrModelId(downloadedModelId) ? 'qwen3-asr' : 'whisper', downloadedModelId),
     [downloadedModelId],
@@ -28,9 +29,10 @@ export const TranscriptionLanguageSelect: React.FC<TranscriptionLanguageSelectPr
     ? language
     : options[0]?.value ?? 'en';
 
+  // A model that does not accept the language: fall back without counting it as the person's pick.
   useEffect(() => {
-    if (supportedValue !== language) setLanguage(supportedValue);
-  }, [language, setLanguage, supportedValue]);
+    if (supportedValue !== language) syncLanguage();
+  }, [language, syncLanguage, supportedValue]);
 
   const selectLanguage = (nextLanguage: string) => {
     setLanguage(nextLanguage);

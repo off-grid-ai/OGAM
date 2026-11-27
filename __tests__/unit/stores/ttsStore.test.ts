@@ -205,7 +205,7 @@ describe('ttsStore', () => {
 
   describe('setEngine fallback', () => {
     it('falls back to the default when the requested engine is not registered', async () => {
-      await app.run(() => getState().setEngine('outetts'));
+      await app.run(() => getState().setEngine('qwen3-tts'));
       expect(getState().settings.engineId).toBe('kokoro');
     });
   });

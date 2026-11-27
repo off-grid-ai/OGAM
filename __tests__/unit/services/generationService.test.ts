@@ -353,6 +353,19 @@ describe('the message queue', () => {
     expect(d.generationService.getState().queuedMessages).toEqual([]);
   });
 
+  it('a merged turn keeps the newest spoken question that holds the voice floor', () => {
+    const sent: any[] = [];
+    d.generationService.setQueueProcessor(async (item: any) => { sent.push(item); });
+    d.generationService.enqueueMessage(queued('q1', 'Spoken first', { voiceTurn: 1 }));
+    d.generationService.enqueueMessage(queued('q2', 'Spoken again', { voiceTurn: 2 }));
+    d.generationService.enqueueMessage(queued('q3', 'Typed'));
+
+    d.generationService.drainQueue();
+
+    expect(sent).toHaveLength(1);
+    expect(sent[0].voiceTurn).toBe(2);
+  });
+
   it('sends a single queued message as it is', () => {
     const sent: any[] = [];
     d.generationService.setQueueProcessor(async (item: any) => { sent.push(item); });
