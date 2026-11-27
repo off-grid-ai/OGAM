@@ -33,3 +33,4 @@ export { GuideTopicScreen } from './GuideScreen/GuideTopicScreen';
 export { AnalyticsInfoScreen } from './AnalyticsInfoScreen';
 export { LanguageScreen } from './LanguageScreen';
 export { ToolsScreen } from './ToolsScreen';
+export { WebSearchSettingsScreen } from './WebSearchSettingsScreen';

@@ -1,5 +1,6 @@
 import React from 'react';
 import { FEATURE_NAMES } from '@offgrid/features';
+import { WEB_SEARCH_PROVIDERS } from '@offgrid/models';
 import { AppSwitch } from '../../components/AppSwitch';
 import { View, Text, ScrollView, StyleSheet } from 'react-native';
 import { TouchableOpacity } from '../../components/Touchable';
@@ -40,6 +41,9 @@ export const ToolsScreen: React.FC = () => {
       enabledTools: cur.includes(toolId) ? cur.filter(id => id !== toolId) : [...cur, toolId],
     });
   };
+
+  const webSearchProvider = useAppStore(st => st.settings.webSearch?.provider) ?? 'builtin';
+  const webSearchLabel = WEB_SEARCH_PROVIDERS.find(p => p.id === webSearchProvider)?.label ?? '';
 
   const showHint = enabledTools.length > 3 && !toolCountHintDismissed;
 
@@ -89,7 +93,11 @@ export const ToolsScreen: React.FC = () => {
               <View style={styles.toolIcon}>
                 <Icon name={tool.icon} size={18} color={isEnabled ? colors.text : colors.textMuted} />
               </View>
-              <View style={styles.toolInfo}>
+              <ToolInfo
+                onPress={tool.id === 'web_search' ? () => navigation.navigate('WebSearchSettings') : undefined}
+                testID={`tool-picker-open-${tool.id}`}
+                style={styles.toolInfo}
+              >
                 <View style={styles.toolNameRow}>
                   <Text style={styles.toolName} testID={`tool-picker-name-${tool.id}`}>{tool.displayName}</Text>
                   {tool.requiresNetwork && (
@@ -97,7 +105,13 @@ export const ToolsScreen: React.FC = () => {
                   )}
                 </View>
                 <Text style={styles.toolDescription}>{tool.summary ?? tool.description}</Text>
-              </View>
+                {tool.id === 'web_search' && (
+                  <View style={styles.toolNameRow}>
+                    <Text style={styles.toolSetting} testID="tool-picker-web-search-provider">{webSearchLabel}</Text>
+                    <Icon name="chevron-right" size={12} color={colors.textMuted} />
+                  </View>
+                )}
+              </ToolInfo>
               <AppSwitch
                 value={isEnabled}
                 onValueChange={() => handleToggleTool(tool.id)}
@@ -115,6 +129,16 @@ export const ToolsScreen: React.FC = () => {
     </AliveScreen>
   );
 };
+
+/** A tool's name and summary; a tool with settings opens them from here, the switch stays a switch. */
+const ToolInfo: React.FC<{ onPress?: () => void; testID: string; style: any; children: React.ReactNode }> = ({ onPress, testID, style, children }) =>
+  onPress ? (
+    <TouchableOpacity style={style} onPress={onPress} testID={testID} accessibilityRole="button" activeOpacity={0.7}>
+      {children}
+    </TouchableOpacity>
+  ) : (
+    <View style={style}>{children}</View>
+  );
 
 const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
   root: {
@@ -196,6 +220,12 @@ const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
   },
   networkIcon: {
     marginLeft: 6,
+  },
+  toolSetting: {
+    ...TYPOGRAPHY.meta,
+    color: colors.textSecondary,
+    marginTop: SPACING.xs,
+    marginRight: SPACING.xs,
   },
   toolDescription: {
     ...TYPOGRAPHY.bodySmall,

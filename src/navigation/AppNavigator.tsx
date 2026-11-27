@@ -53,6 +53,7 @@ import {
   AnalyticsInfoScreen,
   LanguageScreen,
   ToolsScreen,
+  WebSearchSettingsScreen,
 } from '../screens';
 import {
   RootStackParamList,
@@ -285,6 +286,7 @@ export const AppNavigator: React.FC = () => {
         <RootStack.Screen name="AnalyticsInfo" component={AnalyticsInfoScreen} />
         <RootStack.Screen name="Language" component={LanguageScreen} />
         <RootStack.Screen name="Tools" component={ToolsScreen} />
+        <RootStack.Screen name="WebSearchSettings" component={WebSearchSettingsScreen} />
         <RootStack.Screen
           name="DownloadManager"
           component={DownloadManagerScreen}
