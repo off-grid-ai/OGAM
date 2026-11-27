@@ -56,6 +56,8 @@ interface ImageJob {
   conversationId: string | null;
   cancelled: boolean;
   remoteRequest: AbortController | null;
+  /** Why the request failed: the typed cause when there is one, so analytics can name it. */
+  failure?: unknown;
   /** Settles when the request has fully ended, whatever its outcome. */
   settled: Promise<unknown>;
 }
@@ -141,7 +143,9 @@ class ImageGenerationService {
     error: string,
     opts?: { cause?: unknown; remote?: boolean },
   ): null {
-    return this.isLive(job) ? this._fail(error, opts) : null;
+    if (!this.isLive(job)) return null;
+    job.failure = opts?.cause ?? error;
+    return this._fail(error, opts);
   }
 
   /** Own the terminal error state and its retry actions. */
@@ -439,7 +443,7 @@ class ImageGenerationService {
       const result = await run;
       if (result) endAnalytics('done');
       else {
-        endAnalytics(job.cancelled ? 'stopped' : 'failed', { error: this.state.error ?? undefined });
+        endAnalytics(job.cancelled ? 'stopped' : 'failed', { error: job.failure });
         // A picture that failed or was stopped: the rating ask waits for a new run of good ones.
         noteTurnNotGood();
       }
