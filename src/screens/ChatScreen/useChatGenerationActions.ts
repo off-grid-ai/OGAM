@@ -1085,7 +1085,7 @@ async function dispatchResolvedTurn(
   return { handled: false, messageText };
 }
 
-export type DispatchCall = {
+type DispatchCall = {
   text: string;
   attachments?: MediaAttachment[];
   conversationId: string;
@@ -1100,7 +1100,7 @@ export type DispatchCall = {
  * funnels through here, so the decision is made once and never duplicated in an
  * executor. `startTextGeneration` is the pure text executor (it does not route).
  */
-export async function dispatchGenerationFn(
+async function dispatchGenerationFn(
   deps: GenerationDeps,
   call: DispatchCall,
   startTextGeneration: (
