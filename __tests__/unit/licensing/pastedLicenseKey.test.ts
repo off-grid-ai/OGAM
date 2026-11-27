@@ -15,12 +15,14 @@ describe('normalizePastedLicenseKey', () => {
 
   it('takes out invisible characters copied with the key', () => {
     expect(
-      normalizePastedLicenseKey(`﻿${KEY.slice(0, 10)}​${KEY.slice(10)}­⁠`),
+      normalizePastedLicenseKey(
+        `\uFEFF${KEY.slice(0, 10)}\u200B${KEY.slice(10)}\u00AD\u2060`,
+      ),
     ).toBe(KEY);
   });
 
   it('takes off quotes and brackets around the key', () => {
-    expect(normalizePastedLicenseKey(`“${KEY}”`)).toBe(KEY);
+    expect(normalizePastedLicenseKey(`\u201C${KEY}\u201D`)).toBe(KEY);
     expect(normalizePastedLicenseKey(`<${KEY}>`)).toBe(KEY);
     expect(normalizePastedLicenseKey(`'${KEY}'`)).toBe(KEY);
   });
@@ -37,6 +39,6 @@ describe('normalizePastedLicenseKey', () => {
   });
 
   it('gives an empty string for a paste of nothing but spaces', () => {
-    expect(normalizePastedLicenseKey(' \n​ ')).toBe('');
+    expect(normalizePastedLicenseKey(' \n\u200B ')).toBe('');
   });
 });
