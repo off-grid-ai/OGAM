@@ -44,7 +44,11 @@ function useRatingStoreId(): RatingStoreId {
   const [store, setStore] = useState<RatingStoreId>(Platform.OS === 'ios' ? 'app_store' : 'play');
   useEffect(() => {
     let live = true;
-    ratingStore().then(found => { if (live) setStore(found.id); });
+    ratingStore()
+      .then(found => {
+        if (live) setStore(found.id);
+      })
+      .catch(() => undefined);
     return () => { live = false; };
   }, []);
   return store;
