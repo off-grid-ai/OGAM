@@ -116,6 +116,33 @@ describe('speakCompletedTurn', () => {
     expect(spoken).toEqual([]);
   });
 
+  it('ends the turn when spoken replies are off, so the mic answers the next tap', async () => {
+    const { voiceSession } = require('../../../src/services/voiceSession');
+    voiceSession._resetForTesting();
+    voiceSession.dispatch('userStart');
+    voiceSession.dispatch('turnCaptured');
+    useTTSStore.getState().updateSettings({ enabled: false });
+    reply('Here is your horse.');
+
+    turnSpeech.speakCompletedTurn(device.conversationId);
+
+    expect(voiceSession.current().state).toBe('stopped');
+    expect(spoken).toEqual([]);
+  });
+
+  it('marks a reply that arrived whole as ready, so the send does not hand the floor back mid-speech', async () => {
+    const { voiceSession } = require('../../../src/services/voiceSession');
+    voiceSession._resetForTesting();
+    voiceSession.dispatch('userStart');
+    voiceSession.dispatch('turnCaptured');
+    reply('Here is your horse.');
+
+    turnSpeech.speakCompletedTurn(device.conversationId);
+
+    expect(voiceSession.current()).toMatchObject({ state: 'speak', phase: 'talking' });
+    await untilSpoken(1);
+  });
+
   it('bails on a voice note that already has audio', async () => {
     reply('Here is your horse.', { audioPath: '/docs/a.wav' });
 

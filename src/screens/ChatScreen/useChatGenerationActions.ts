@@ -44,6 +44,7 @@ import {
   useAppStore,
 } from '../../stores';
 import { callHook, HOOKS } from '../../bootstrap/hookRegistry';
+import { voiceSession } from '../../services/voiceSession';
 import {
   DocumentCitation,
   Message,
@@ -1168,10 +1169,37 @@ function startConversation(deps: GenerationDeps, modelId: string): string {
   deps.setActiveConversation(conversationId);
   return conversationId;
 }
+/**
+ * A spoken turn hands the floor to the assistant the moment it is captured, and a reply hands it back once
+ * it has been heard. A send that ends with no reply ever ready - no model, a model that would not load, a
+ * picture that failed, an empty answer - had nothing to hand it back, so the mic stayed shut until the
+ * chat was reopened. Phase `transcribing` is the floor as the capture left it: no reply became ready.
+ */
+function releaseVoiceTurnWithoutReply(): void {
+  const session = voiceSession.current();
+  if (session.state === 'speak' && session.phase === 'transcribing' && !session.replayReturnsTo) {
+    logger.log('[TURN] send ended with no reply - handing the floor back');
+    voiceSession.dispatch('replyFinished');
+  }
+}
+
 export async function handleSendFn(
   deps: GenerationDeps,
   call: SendCall,
 ): Promise<void> {
+  let queued = false;
+  try {
+    queued = (await sendTurn(deps, call)) === 'queued';
+  } finally {
+    // A queued turn keeps the floor: its reply comes when the queue drains.
+    if (!queued) releaseVoiceTurnWithoutReply();
+  }
+}
+
+async function sendTurn(
+  deps: GenerationDeps,
+  call: SendCall,
+): Promise<'queued' | 'sent'> {
   const { text, attachments, imageMode = 'auto', assistantEnabled, startGeneration } = call;
   abortPreload(); // user acted — stop background warming so it can't block them
   // The first chat model is still downloading: the message waits in this chat's queue and goes when
@@ -1191,14 +1219,14 @@ export async function handleSendFn(
       styleIds: { image: chatStyleId(conversationId, 'image'), video: chatStyleId(conversationId, 'video') },
       waitsForModel: true,
     });
-    return;
+    return 'queued';
   }
   if (!deps.hasActiveModel) {
     deps.setAlertState(readinessAlert(modelReadiness({ need: 'chat', ready: false }), deps.navigation));
-    return;
+    return 'sent';
   }
   // Vision gate (shared with resend): never send an image to a model that can't do vision.
-  if (blockedImageForNonVisionModel(deps, attachments)) return;
+  if (blockedImageForNonVisionModel(deps, attachments)) return 'sent';
   callHook(HOOKS.audioStop); // stop stale TTS on the new turn (not a streaming-flag effect — see useChatScreen)
   await modelResidencyManager.reclaimSttForGeneration(); // free idle Whisper before LLM+TTS so they don't OOM on tight devices
   const targetConversationId =
@@ -1235,7 +1263,7 @@ export async function handleSendFn(
       },
     });
     if (call.sendNow) await sendQueuedNowFn(deps, queuedId);
-    return;
+    return 'queued';
   }
   await dispatchGenerationFn(
     deps,
@@ -1248,6 +1276,7 @@ export async function handleSendFn(
     },
     startGeneration,
   );
+  return 'sent';
 }
 /**
  * Send one queued message at once: it moves to the front, the running reply (text, image or video) stops,
