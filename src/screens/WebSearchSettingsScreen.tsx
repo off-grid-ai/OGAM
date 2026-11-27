@@ -188,7 +188,7 @@ export const WebSearchSettingsScreen: React.FC = () => {
           />
           {check.state === 'done' && <TestResult result={check.result} />}
         </View>
-        <Text style={styles.hint}>{WEB_SEARCH_COPY.fallback}</Text>
+        {provider !== 'builtin' && <Text style={styles.hint}>{WEB_SEARCH_COPY.fallback}</Text>}
       </ScrollView>
     </AliveScreen>
   );
