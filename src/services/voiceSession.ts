@@ -46,6 +46,13 @@ let session: VoiceSession | null = null;
 
 const current = (): VoiceSession => (session ??= initialVoiceSession(handsFree()));
 
+/**
+ * Which captured spoken turn holds the floor: counted up each time a capture hands the floor to the
+ * assistant. A queued question remembers it, so its drain can hand back ITS floor and never end a later
+ * spoken turn that happens to be in the same state.
+ */
+let capturedTurns = 0;
+
 export const voiceSession = {
   current: (): VoiceSession => current(),
 
@@ -56,6 +63,16 @@ export const voiceSession = {
   speechMayPlay: (): boolean => speechMayPlay(current()),
 
   /**
+   * The spoken turn that holds the floor with no reply ready yet (`speak`/`transcribing`, as the capture
+   * left it), or null when no captured turn is waiting for its reply.
+   */
+  floorTurn(): number | null {
+    const now = current();
+    const waiting = now.state === 'speak' && now.phase === 'transcribing' && !now.replayReturnsTo;
+    return waiting ? capturedTurns : null;
+  },
+
+  /**
    * Apply an event. Silent when nothing changes, so the log shows real transitions only.
    *
    * Every transition is logged with its cause: a state that is wrong is always wrong because of the
@@ -64,6 +81,10 @@ export const voiceSession = {
   dispatch(event: VoiceSessionEvent): void {
     const before = current();
     session = nextVoiceSession(before, event, handsFree());
+    const captured = session.state === 'speak' && session.phase === 'transcribing';
+    if (event === 'turnCaptured' && captured && (before.state !== 'speak' || before.phase !== 'transcribing')) {
+      capturedTurns += 1;
+    }
     // State AND phase. `phase` is what a person is shown - the hero says "Listening" and then
     // "Recording you now" - so a phase-only change is a real change and a surface that is not told
     // shows the wrong thing for the whole turn.

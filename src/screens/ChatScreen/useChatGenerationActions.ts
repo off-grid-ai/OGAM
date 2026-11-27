@@ -4,7 +4,7 @@ import { readinessAlert } from './readinessAlert';
 import { videoSeam } from '../../bootstrap/videoSeam';
 import { mediaStyle } from '@offgrid/models';
 import { adoptDraftStyles, chatStyleId } from '../../stores/mediaStyleStore';
-import type { MediaStyleIds } from '../../services/generationService';
+import type { MediaStyleIds, QueuedMessage } from '../../services/generationService';
 /* eslint-disable max-lines -- cohesive generation-action orchestrator (send/regenerate/dispatch/route share the same GenerationDeps + session state); splitting it would scatter tightly-coupled turn logic. */
 import { Dispatch, SetStateAction } from 'react';
 import { AlertState, showAlert, hideAlert } from '../../components';
@@ -1175,11 +1175,46 @@ function startConversation(deps: GenerationDeps, modelId: string): string {
  * picture that failed, an empty answer - had nothing to hand it back, so the mic stayed shut until the
  * chat was reopened. Phase `transcribing` is the floor as the capture left it: no reply became ready.
  */
-function releaseVoiceTurnWithoutReply(): void {
-  const session = voiceSession.current();
-  if (session.state === 'speak' && session.phase === 'transcribing' && !session.replayReturnsTo) {
-    logger.log('[TURN] send ended with no reply - handing the floor back');
-    voiceSession.dispatch('replyFinished');
+function releaseVoiceTurnWithoutReply(turn?: number): void {
+  const holder = voiceSession.floorTurn();
+  if (holder === null) return;
+  // A queued question hands back only its own floor: a later spoken turn may be waiting the same way.
+  if (turn !== undefined && holder !== turn) return;
+  logger.log('[TURN] send ended with no reply - handing the floor back');
+  voiceSession.dispatch('replyFinished');
+}
+
+/** The spoken turn a message queued now keeps the floor for, if one is waiting for its reply. */
+function queuedVoiceTurn(): { voiceTurn?: number } {
+  const turn = voiceSession.floorTurn();
+  return turn === null ? {} : { voiceTurn: turn };
+}
+
+/**
+ * Send a queued message as the queue drains it. A spoken question kept the floor while it waited; when
+ * its turn ends with no reply ever ready, that floor goes back, as for a direct send. A reply hands it
+ * back itself once it has been heard.
+ */
+export async function handleQueuedSendFn(
+  deps: GenerationDeps,
+  item: QueuedMessage,
+  startGeneration: (convId: string, text: string, assistantEnabled?: boolean) => Promise<void>,
+): Promise<void> {
+  try {
+    await dispatchGenerationFn(
+      deps,
+      {
+        text: item.text,
+        attachments: item.attachments,
+        conversationId: item.conversationId,
+        imageMode: item.imageMode,
+        assistantEnabled: item.assistantEnabled,
+        styleIds: item.styleIds,
+      },
+      startGeneration,
+    );
+  } finally {
+    if (item.voiceTurn !== undefined) releaseVoiceTurnWithoutReply(item.voiceTurn);
   }
 }
 
@@ -1218,6 +1253,7 @@ async function sendTurn(
       assistantEnabled,
       styleIds: { image: chatStyleId(conversationId, 'image'), video: chatStyleId(conversationId, 'video') },
       waitsForModel: true,
+      ...queuedVoiceTurn(),
     });
     return 'queued';
   }
@@ -1261,6 +1297,7 @@ async function sendTurn(
         image: chatStyleId(targetConversationId, 'image'),
         video: chatStyleId(targetConversationId, 'video'),
       },
+      ...queuedVoiceTurn(),
     });
     if (call.sendNow) await sendQueuedNowFn(deps, queuedId);
     return 'queued';

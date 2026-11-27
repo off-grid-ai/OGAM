@@ -13,11 +13,14 @@ type Session = typeof import('../../../src/services/voiceSession')['voiceSession
 
 let voiceSession: Session;
 let handleSendFn: (deps: unknown, call: unknown) => Promise<void>;
+let handleQueuedSendFn: (deps: unknown, item: unknown, startGeneration: () => Promise<void>) => Promise<void>;
+let generationService: { getState: () => { queuedMessages: Array<{ voiceTurn?: number }> } };
 
 beforeEach(() => {
   installNativeBoundary({ llama: true, fs: true, ram: { platform: 'android', totalBytes: 12 * GB, availBytes: 8 * GB } });
   ({ voiceSession } = require('../../../src/services/voiceSession'));
-  ({ handleSendFn } = require('../../../src/screens/ChatScreen/useChatGenerationActions'));
+  ({ handleSendFn, handleQueuedSendFn } = require('../../../src/screens/ChatScreen/useChatGenerationActions'));
+  ({ generationService } = require('../../../src/services/generationService'));
   voiceSession._resetForTesting();
   // The person taps the mic, speaks, and the question is captured: the assistant has the floor.
   voiceSession.dispatch('userStart');
@@ -51,5 +54,41 @@ describe('a voice question that gets a reply', () => {
     // The first token makes the reply ready, as the chat store does when it streams.
     await send(deps, async () => { voiceSession.dispatch('replyReady'); });
     expect(voiceSession.current()).toMatchObject({ state: 'speak', phase: 'talking' });
+  });
+});
+
+describe('a voice question that waits in the queue', () => {
+  // The first chat model is still downloading, so the question waits in the queue and keeps the floor.
+  const queueIt = async () => {
+    const { deps } = makeGenDeps({ hasTextModel: false, arrivingTextModel: { modelId: 'txt' } });
+    await send(deps, async () => {});
+    const [item] = generationService.getState().queuedMessages;
+    expect(item.voiceTurn).toBeDefined();
+    expect(voiceSession.current()).toMatchObject({ state: 'speak', phase: 'transcribing' });
+    return item;
+  };
+
+  it('hands its floor back when the queue sends it and no reply comes', async () => {
+    const item = await queueIt();
+    const { deps } = makeGenDeps();
+    await handleQueuedSendFn(deps, item, async () => {});
+    expect(voiceSession.current().state).toBe('stopped');
+  });
+
+  it('keeps the floor while its reply is being heard', async () => {
+    const item = await queueIt();
+    const { deps } = makeGenDeps();
+    await handleQueuedSendFn(deps, item, async () => { voiceSession.dispatch('replyReady'); });
+    expect(voiceSession.current()).toMatchObject({ state: 'speak', phase: 'talking' });
+  });
+
+  it('leaves a later spoken turn holding the floor alone', async () => {
+    const item = await queueIt();
+    // The person barges in and asks again: a new turn now holds the floor, waiting for its own reply.
+    voiceSession.dispatch('userStart');
+    voiceSession.dispatch('turnCaptured');
+    const { deps } = makeGenDeps();
+    await handleQueuedSendFn(deps, item, async () => {});
+    expect(voiceSession.current()).toMatchObject({ state: 'speak', phase: 'transcribing' });
   });
 });
