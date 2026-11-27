@@ -298,12 +298,29 @@ if stage upload; then
   [ "$DO_IOS" = 0 ] || [ -f build/OffgridMobile.ipa ] || error "IPA not found: run --build-only first"
 fi
 if stage all upload; then
-if [ "$DO_ANDROID" = 1 ] && [ "$RESUME_IOS" = 0 ]; then info "Android → Play open testing (AAB)…"; bundle exec fastlane android upload_beta; fi
+if [ "$DO_ANDROID" = 1 ] && [ "$RESUME_IOS" = 0 ]; then
+  info "Android → Play open testing (AAB)…"
+  # Play refuses every upload while the app is suspended there. The beta still ships: TestFlight, the
+  # tag and the GitHub prerelease (APK + AAB) go ahead and the Play step only warns. Set
+  # PLAY_UPLOAD_REQUIRED=1 once the Play listing is back, so a Play failure stops the beta again.
+  if ! bundle exec fastlane android upload_beta; then
+    [ "${PLAY_UPLOAD_REQUIRED:-0}" = 1 ] && error "Play upload failed."
+    warn "Play upload failed (the app is suspended on Play). The APK and AAB still go on the GitHub prerelease."
+    [ -n "${GITHUB_ACTIONS:-}" ] && echo "::warning title=Play upload skipped::Play refused the upload (app suspended). The APK and AAB are on the GitHub prerelease."
+  fi
+fi
 if [ "$DO_IOS" = 1 ];     then info "iOS → TestFlight external…";     bundle exec fastlane ios upload_beta;     fi
 fi
 if stage upload; then info "Uploaded; the tag and the GitHub prerelease wait for every platform (--finalize)."; exit 0; fi
 
 # ── success → commit the bump, cut the PRERELEASE tag, GH prerelease ──
+# Every beta release carries all three: the APK (sideload), the AAB (Play) and the IPA (TestFlight).
+# A run that built only one platform uploads to its store but cuts no release.
+for f in android/app/build/outputs/apk/release/app-release.apk \
+         android/app/build/outputs/bundle/release/app-release.aab \
+         build/OffgridMobile.ipa; do
+  [ -f "$f" ] || error "No release without the APK, AAB and IPA: $f is missing. Run the beta for both platforms."
+done
 trap - EXIT   # keep the bump now that the build shipped
 # package.json (and npm's copy of the number in the lock) always ride the commit: the version bump is
 # not platform-specific, and leaving it out would let the next cut read a stale base and reuse this
@@ -331,15 +348,9 @@ GH_ARGS=()
 APK_DST="$ROOT_DIR/OffgridMobile-${BETA_VERSION}.apk"
 AAB_DST="$ROOT_DIR/OffgridMobile-${BETA_VERSION}.aab"
 IPA_DST="$ROOT_DIR/OffgridMobile-${BETA_VERSION}.ipa"
-if [ "$DO_ANDROID" = 1 ]; then
-  [ -f android/app/build/outputs/apk/release/app-release.apk ] && \
-    { cp android/app/build/outputs/apk/release/app-release.apk "$APK_DST"; GH_ARGS+=("$APK_DST"); }
-  [ -f android/app/build/outputs/bundle/release/app-release.aab ] && \
-    { cp android/app/build/outputs/bundle/release/app-release.aab "$AAB_DST"; GH_ARGS+=("$AAB_DST"); }
-fi
-if [ "$DO_IOS" = 1 ]; then
-  [ -f build/OffgridMobile.ipa ] && { cp build/OffgridMobile.ipa "$IPA_DST"; GH_ARGS+=("$IPA_DST"); }
-fi
+cp android/app/build/outputs/apk/release/app-release.apk "$APK_DST"; GH_ARGS+=("$APK_DST")
+cp android/app/build/outputs/bundle/release/app-release.aab "$AAB_DST"; GH_ARGS+=("$AAB_DST")
+cp build/OffgridMobile.ipa "$IPA_DST"; GH_ARGS+=("$IPA_DST")
 # Carry the tested build id into the prerelease body too (redundant with the annotated tag),
 # so `gh release view "$TAG"` is a second recovery path if the local tag object is missing.
 printf '\n\n%s\n' "$BUILD_LINE" >> "$NOTES_FILE"
@@ -357,6 +368,6 @@ rm -f "$NOTES_FILE" "${ANDROID_CHANGELOG:-}" "$APK_DST" "$AAB_DST" "$IPA_DST"
 echo ""
 info "${BOLD}Beta ${BETA_VERSION} shipped.${NC}"
 [ "$DO_IOS" = 1 ]     && info "  iOS:     TestFlight external groups (after Beta App Review)"
-[ "$DO_ANDROID" = 1 ] && info "  Android: Play Console → Open testing (after Play review)"
+[ "$DO_ANDROID" = 1 ] && info "  Android: the APK on the GitHub prerelease (and Play open testing once Play accepts uploads again)"
 info "  GitHub:  $(gh release view "$TAG" --json url -q .url 2>/dev/null)"
 info "Approve the beta, then run scripts/release.sh to cut the real version to production."

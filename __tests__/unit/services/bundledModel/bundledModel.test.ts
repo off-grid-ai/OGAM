@@ -36,6 +36,7 @@ function fakePlay(initial: Record<string, PackState>): FakePlay {
   const removed: string[] = [];
   return {
     canMoveFiles: true,
+    inApp: true,
     removed,
     getPacks: async names => Object.fromEntries(names.map(n => [n, initial[n]])),
     fetch: async names => Object.fromEntries(names.map(n => [n, initial[n]])),
@@ -154,7 +155,7 @@ describe('startBundledModel', () => {
     expect(model?.fileSize).toBe(WEIGHTS);
   });
 
-  it('with no port given it asks the platform, which on this test platform has no packs', async () => {
+  it('with no port given it asks the platform: outside the app (this test, the web preview) there is no native module, and nothing downloads', async () => {
     await expect(svc.startBundledModel()).resolves.toBeUndefined();
     expect(downloads().downloads[KEY]).toBeUndefined();
   });
@@ -241,16 +242,18 @@ describe('startBundledModel', () => {
     expect(stores().useAppStore.getState().activeModelId).toBe(KEY);
   });
 
-  it('a build with no packs refuses the ask, and the regular download serves', async () => {
+  it('a build with no packs refuses the ask, and the regular download of the same model serves', async () => {
     const play = fakePlay({ chat_model: pack('chat_model', 'not_installed'), chat_mmproj: pack('chat_mmproj', 'not_installed') });
     play.fetch = jest.fn(async () => { throw new Error('APP_UNAVAILABLE'); });
     await expect(svc.startBundledModel(play)).resolves.toBeUndefined();
     expect(play.fetch).toHaveBeenCalledTimes(1);
-    expect(downloads().downloads[KEY]).toBeUndefined();
+    // Queued, not arrived: the store and the APK get the same model, the APK fetches it at first open.
+    expect(downloads().downloads[KEY]?.modelId).toBe('LiquidAI/LFM3-VL-2B-GGUF');
     expect(stores().useAppStore.getState().downloadedModels.map(m => m.id)).not.toContain(KEY);
   });
 
-  it('with no packs (sideloaded build) nothing changes', async () => {
+  it('with no packs, a phone that finished onboarding starts no download on its own (an update)', async () => {
+    stores().useAppStore.setState({ hasCompletedOnboarding: true });
     await svc.startBundledModel(fakePlay({}));
     expect(downloads().downloads[KEY]).toBeUndefined();
     expect(stores().useAppStore.getState().downloadedModels.map(m => m.id)).not.toContain(KEY);

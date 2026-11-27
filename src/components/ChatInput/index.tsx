@@ -823,7 +823,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
           )}
         </View>
 
-        {actionButton}
+        <View style={styles.actionSlot}>{actionButton}</View>
       </View>
       </View>
 

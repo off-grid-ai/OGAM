@@ -158,6 +158,12 @@ export const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     gap: 8,
     paddingRight: 12,
   },
+  // Send / mic / stop: centred on one line of the pill (the 44 god button, 6 padding and a 1 border each
+  // side = 58), so they sit level with the icons; a longer message grows the pill up and they stay at its foot.
+  actionSlot: {
+    height: 58,
+    justifyContent: 'center' as const,
+  },
   // Pill container
   pill: {
     flex: 1,
@@ -207,7 +213,10 @@ export const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     fontFamily: FONTS.sans,
     minHeight: 36,
     maxHeight: 150,
-    textAlignVertical: 'top' as const,
+    // One line sits on the row's centre, level with the god icon; more lines grow the field down.
+    textAlignVertical: 'center' as const,
+    // Android adds space above the font's ascent, which pushed the text above the icons' centre.
+    includeFontPadding: false,
     paddingTop: Platform.OS === 'ios' ? 10 : 6,
     paddingBottom: Platform.OS === 'ios' ? 10 : 6,
     paddingRight: 4,

@@ -4,7 +4,7 @@ Off Grid AI Mobile (OGAM) and Off Grid AI Desktop (OGAD) send anonymous stats (c
 
 ## Rules
 
-- Off by default. The SDK is not created until the user opts in. Before opt-in the app makes no request to PostHog.
+- Off by default. The SDK is not created until the user opts in. Before opt-in the app makes no request to PostHog, with one exception: a content report the person sends with Report (see Report generated content).
 - Opt-out shuts the SDK down, drops anything queued and resets the anonymous ID.
 - One random anonymous ID per install, made by the SDK. We never call `identify`, never send an email, license key, account ID or device hardware ID.
 - PostHog project: EU Cloud, "discard client IP" on, GeoIP off, no autocapture, no session replay, no feature flags, no remote config, no surveys.
@@ -15,8 +15,8 @@ Off Grid AI Mobile (OGAM) and Off Grid AI Desktop (OGAD) send anonymous stats (c
 
 ## Never send
 
-- Prompts, replies, transcripts, reasoning, tool arguments or tool results.
-- File names, document names, paths, URLs, domains, hostnames or IP addresses (including remote server and LAN addresses).
+- Prompts (except the reported prompt in `content_reported`, below), replies, transcripts, reasoning, tool arguments or tool results.
+- File names, document names, paths, URLs, domains, hostnames or IP addresses (including remote server and LAN addresses), except as typed inside a reported prompt.
 - Search terms.
 - Names of imported model files, private Hugging Face repos or custom MCP connectors. Send `custom` instead.
 - Error messages or stack frames before scrubbing (see Crashes).
@@ -184,3 +184,10 @@ All multi-step journeys use three events with a `flow` property, so every funnel
 - The debug log never holds chat content: no log line may include prompts, replies, transcripts or tool output.
 - The user sees the log before it is sent.
 - It works whether or not analytics is on.
+
+## Report generated content
+
+- OGAM: Report on a generated image or video (chat, Gallery, Video Studio) sends one event, `content_reported`: `type` (`image`, `video`), `reason` (`sexual`, `violent`, `hateful`, `harmful`, `other`), `prompt`, `model`, `platform`, `app_version`.
+- `prompt` is the prompt exactly as the person typed it, so a reviewer sees what made the image or video; any URL or path typed in it goes too. Nothing else from the chat is sent.
+- It is sent because the person pressed Report, so it goes whether or not analytics is on. It does not start analytics: no SDK, a fresh ID for each report, no person profile.
+- The picture or clip is never sent.

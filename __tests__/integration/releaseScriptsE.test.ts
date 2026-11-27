@@ -47,12 +47,16 @@ beforeEach(() => {
   // A git hook exports GIT_DIR, GIT_INDEX_FILE and friends. Inherited, they point every fixture
   // command at the real repository (one push turned it bare), so the fixtures drop them.
   const outside = Object.fromEntries(Object.entries(process.env).filter(([key]) => !/^GIT_/.test(key)));
-  env = { ...outside, PATH: `${bin}:${process.env.PATH}`, RELEASE_BRANCH: '', SLACK_WEBHOOK_URL: '', TESTFLIGHT_EXTERNAL_GROUPS: 'Fixture testers', GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: '/dev/null' };
+  env = { ...outside, PATH: `${bin}:${process.env.PATH}`, RELEASE_BRANCH: '', SLACK_WEBHOOK_URL: '', TESTFLIGHT_EXTERNAL_GROUPS: 'Fixture testers', ANDROID_HOME: root, GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: '/dev/null' };
   // No credentials or real uploads: these executables are the build/store/network boundary.
   // A Ruby new enough for fastlane (scripts/lib/ruby-path.sh), so the stub bundle below stays first on PATH
   // whatever Ruby this machine has.
   writeFileSync(join(bin, 'ruby'), '#!/bin/sh\nexit 0\n', { mode: 0o755 });
-  writeFileSync(join(bin, 'bundle'), '#!/bin/sh\nif [ "$4" = build ]; then mkdir -p build; echo ipa > build/OffgridMobile.ipa; fi\n', { mode: 0o755 });
+  const aab = 'android/app/build/outputs/bundle/release';
+  writeFileSync(join(bin, 'bundle'), `#!/bin/sh
+if [ "$3 $4" = "ios build" ]; then mkdir -p build; echo ipa > build/OffgridMobile.ipa; fi
+if [ "$3 $4" = "android build" ]; then mkdir -p ${aab}; echo aab > ${aab}/app-release.aab; fi
+`, { mode: 0o755 });
   writeFileSync(join(bin, 'gh'), `#!/bin/sh\nif [ "$2" = download ]; then exit 1; fi\necho "$*" >> "${join(root, 'gh-calls.log')}"\nexit 0\n`, { mode: 0o755 });
   writeFileSync(join(bin, 'xcodebuild'), '#!/bin/sh\nexit 0\n', { mode: 0o755 });
   writeFileSync(join(bin, 'claude'), '#!/bin/sh\necho "Release fixture notes"\n', { mode: 0o755 });
@@ -65,6 +69,11 @@ beforeEach(() => {
     cpSync(join(source, 'scripts', name), join(mobile, 'scripts', name));
   }
   writeFileSync(join(mobile, 'fastlane/Fastfile'), '# Native build boundary\n');
+  // Every beta release carries the APK, the AAB and the IPA, so a release is cut from a run of both
+  // platforms. Gradle is the Android build boundary: it writes the APK the build reports.
+  mkdirSync(join(mobile, 'android/app'), { recursive: true });
+  writeFileSync(join(mobile, 'android/app/build.gradle'), 'versionCode 1\nversionName "0.0.1"\n');
+  writeFileSync(join(mobile, 'android/gradlew'), '#!/bin/sh\nmkdir -p app/build/outputs/apk/release\necho apk > app/build/outputs/apk/release/app-release.apk\n', { mode: 0o755 });
   writeFileSync(join(mobile, 'ios/OffgridMobile.xcodeproj/project.pbxproj'), 'MARKETING_VERSION = 0.0.1;\nCURRENT_PROJECT_VERSION = 1;\n');
   writeFileSync(join(mobile, 'package.json'), `${JSON.stringify({ name: 'release-fixture', version: '0.0.1' }, null, 2)}\n`);
   mkdirSync(join(mobile, 'release-notes'));
@@ -118,6 +127,85 @@ it('refuses store notes that are a commit list, and tags nothing', () => {
   expect(result.status).not.toBe(0);
   expect(result.stdout).toContain('commit hashes');
   expect(git(join(root, 'mobile-origin.git'), 'tag', '-l', 'v0.0.1')).toBe('');
+});
+
+/**
+ * GitHub is the store boundary: the beta prerelease holds the tested APK, AAB and IPA, and
+ * `release view` answers whether v<version> already exists.
+ */
+function githubWithTestedBuilds(releaseExists: boolean) {
+  writeFileSync(join(root, 'bin', 'gh'), `#!/bin/sh
+echo "$*" >> "${join(root, 'gh-calls.log')}"
+if [ "$2" = download ]; then
+  for ext in apk aab ipa; do echo "$ext" > "$5/OffgridMobile-0.0.1-beta.1.$ext"; done
+  exit 0
+fi
+if [ "$2" = view ] && [ "$3" = v0.0.1 ]; then ${releaseExists ? 'exit 0' : 'exit 1'}; fi
+exit 0
+`, { mode: 0o755 });
+  git(mobile, 'tag', '-a', 'v0.0.1-beta.1', '-m', 'Beta\n\nBuild: 100');
+  git(mobile, 'push', '--tags', 'origin', 'main');
+}
+
+const githubCalls = () => readFileSync(join(root, 'gh-calls.log'), 'utf8');
+const testedBuilds = /OffgridMobile-0\.0\.1-beta\.1\.aab .*OffgridMobile-0\.0\.1-beta\.1\.apk .*OffgridMobile-0\.0\.1-beta\.1\.ipa/;
+
+it('the GitHub release carries the tested APK, AAB and IPA, and a GitHub-only run ends in success', () => {
+  githubWithTestedBuilds(false);
+  const result = run('promote', ['v0.0.1-beta.1', '--github']);
+  expect(result.status).toBe(0);
+  const create = githubCalls().split('\n').find(line => line.startsWith('release create v0.0.1 '));
+  expect(create).toMatch(testedBuilds);
+  expect(create).toContain('--latest');
+});
+
+it('a re-run attaches the tested builds to the release that already exists', () => {
+  githubWithTestedBuilds(true);
+  const result = run('promote', ['v0.0.1-beta.1', '--github']);
+  expect(result.status).toBe(0);
+  const upload = githubCalls().split('\n').find(line => line.startsWith('release upload v0.0.1 '));
+  expect(upload).toMatch(testedBuilds);
+  expect(upload).toContain('--clobber');
+  expect(githubCalls()).not.toContain('release create v0.0.1 ');
+});
+
+// Nothing listens on port 9, so the real notifier tries to post and logs that it did.
+const slack = { SLACK_WEBHOOK_URL: 'http://127.0.0.1:9/' };
+
+it('the run that creates the release announces it in Slack', () => {
+  githubWithTestedBuilds(false);
+  const result = run('promote', ['v0.0.1-beta.1', '--github'], slack);
+  expect(result.status).toBe(0);
+  expect(result.stdout + result.stderr).toContain('[slack-release]');
+});
+
+it('a re-run does not announce the same release in Slack again', () => {
+  githubWithTestedBuilds(true);
+  const result = run('promote', ['v0.0.1-beta.1', '--github'], slack);
+  expect(result.status).toBe(0);
+  expect(result.stdout + result.stderr).not.toContain('[slack-release]');
+  expect(result.stdout).toContain('not posting again');
+});
+
+it('a copy of the script outside the checkout releases the checkout named by PROMOTE_ROOT', () => {
+  githubWithTestedBuilds(false);
+  const outside = join(root, 'main-script');
+  mkdirSync(outside);
+  cpSync(join(mobile, 'scripts/promote.sh'), join(outside, 'promote.sh'));
+  const result = spawnSync('bash', [join(outside, 'promote.sh'), 'v0.0.1-beta.1', '--github'], {
+    cwd: outside, env: { ...env, PROMOTE_ROOT: mobile }, encoding: 'utf8',
+  });
+  expect(result.status).toBe(0);
+  expect(git(join(root, 'mobile-origin.git'), 'tag', '-l', 'v0.0.1')).toBe('v0.0.1');
+  expect(githubCalls()).toMatch(testedBuilds);
+});
+
+it('an Android-only run ends in success after naming its one manual step', () => {
+  githubWithTestedBuilds(false);
+  const result = run('promote', ['v0.0.1-beta.1', '--android']);
+  expect(result.status).toBe(0);
+  expect(result.stdout).toContain('Play Console');
+  expect(result.stdout).not.toContain('App Store Connect');
 });
 
 it('M3: refuses a clean local commit ahead of origin/main', () => {
@@ -175,19 +263,19 @@ it('a second cut of a version not yet promoted is its next beta, not a new versi
   // Ali, 2026-11-10: the second beta of an unreleased 0.0.123 shipped as 0.0.124-beta.1.
   git(mobile, 'tag', '-a', 'v0.0.1-beta.1', '-m', 'Beta\n\nBuild: 100');
   git(mobile, 'push', 'origin', 'v0.0.1-beta.1');
-  const result = run('uat', ['--ios']);
+  const result = run('uat', []);
   if (result.status !== 0) throw new Error(result.stdout + result.stderr);
   const create = readFileSync(join(root, 'gh-calls.log'), 'utf8').split('\n').find(line => line.startsWith('release create'));
   expect(create).toContain('v0.0.1-beta.2');
 });
 
-it('attaches the IPA that went to TestFlight to the GitHub prerelease', () => {
+it('attaches the APK, AAB and IPA to the GitHub prerelease', () => {
   markLive();
-  const result = run('uat', ['--ios']);
+  const result = run('uat', []);
   if (result.status !== 0) throw new Error(result.stdout + result.stderr);
   const create = readFileSync(join(root, 'gh-calls.log'), 'utf8').split('\n').find(line => line.startsWith('release create'));
   expect(create).toContain('v0.0.2-beta.1');
-  expect(create).toContain('OffgridMobile-0.0.2-beta.1.ipa');
+  for (const file of ['apk', 'aab', 'ipa']) expect(create).toContain(`OffgridMobile-0.0.2-beta.1.${file}`);
 });
 
 it.each(['', 'release/candidate'])('M3/M4: records shared source in the beta tag (explicit branch: %s)', branch => {
@@ -197,7 +285,7 @@ it.each(['', 'release/candidate'])('M3/M4: records shared source in the beta tag
     save(mobile, 'candidate.txt', 'Explicit release branch');
   }
   markLive();
-  const result = run('uat', ['--ios'], { RELEASE_BRANCH: branch });
+  const result = run('uat', [], { RELEASE_BRANCH: branch });
   if (result.status !== 0) throw new Error(result.stdout + result.stderr);
   expect(result.status).toBe(0);
   const annotation = git(join(root, 'mobile-origin.git'), 'for-each-ref', 'refs/tags/v0.0.2-beta.1', '--format=%(contents)');

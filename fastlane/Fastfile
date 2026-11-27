@@ -493,7 +493,15 @@ platform :ios do
     build = find_build.call
     UI.user_error!("TestFlight has no build #{version} (#{build_number}) after the upload") unless build
     # External groups go through Beta App Review (usually only the first build of a version).
-    build.post_beta_app_review_submission if build.ready_for_beta_submission?
+    # While an earlier build of the same version is still in review, Apple refuses a second
+    # submission: this build is uploaded and joins the groups, and Apple reviews it after that one.
+    in_review = ->(error) { error.message.include?("Another build is in review") }
+    begin
+      build.post_beta_app_review_submission if build.ready_for_beta_submission?
+    rescue Spaceship::UnexpectedResponse => e
+      raise unless in_review.call(e)
+      UI.important("TestFlight #{version} (#{build_number}): an earlier #{version} build is still in Beta App Review; this one waits for it.")
+    end
     build.add_beta_groups(beta_groups: groups)
     UI.success("TestFlight #{version} (#{build_number}) sent to external groups: #{names.join(', ')}")
   end

@@ -16,7 +16,7 @@ import { useAppStore } from '../../stores/appStore';
 import { selectHasProAccess } from '../../stores/proAccessSlice';
 import { appVersion } from '../../utils/appVersion';
 import { hardwareService } from '../hardware';
-import { analyticsBuildAllowed, createAnalyticsClient, type AnalyticsClient } from './client';
+import { analyticsBuildAllowed, createAnalyticsClient, sendOneEvent, type AnalyticsClient } from './client';
 import { scrubExceptionProperties } from './scrub';
 import { markForeground, markStageEnded, markStageStarted, takeUncleanExit } from './uncleanExit';
 import { maybePromptAfterFailure, maybePromptAfterFirstChat } from './consentPrompt';
@@ -910,4 +910,22 @@ export function downloadEnded(key: string, outcome: 'done' | 'failed', error?: u
     flowStep(flow, 'downloaded');
     flowFinished(flow, 'done');
   }
+}
+
+/**
+ * The person pressed Report on a generated image or video. Sent whether or not analytics is on,
+ * because they asked for it; it does not start analytics. Only the prompt, the reason, the model
+ * and the type go: never the picture or clip. Rejects when it could not be sent.
+ */
+export function contentReported(report: {
+  type: 'image' | 'video';
+  reason: string;
+  prompt: string;
+  model: string;
+}): Promise<void> {
+  return sendOneEvent('content_reported', {
+    ...report,
+    platform: Platform.OS,
+    app_version: appVersion(),
+  });
 }

@@ -80,7 +80,7 @@ it('plays in the card with pause, time, scrubber and mute; full screen opens at 
   );
 }, 60_000);
 
-it('More on the card is a list of what full screen offers: Extend, Save, Share, then Delete', async () => {
+it('More on the card is a list of what full screen offers: Extend, Save, Share, Report, then Delete', async () => {
   const app = await launchStudioApp();
   const { view, rtl } = app;
   await makeClipInChat(app, 'a paper boat drifting on a pond');
@@ -88,7 +88,7 @@ it('More on the card is a list of what full screen offers: Extend, Save, Share, 
   rtl.fireEvent.press(view.getByTestId(`more-${CARD}`));
   const sheet = await view.findByTestId('clip-actions');
   const rows = rtl.within(sheet).getAllByRole('button').map(row => row.props.testID);
-  expect(rows).toEqual(['continue', 'save', 'share', 'delete'].map(action => `sheet-card-${CARD}-${action}`));
+  expect(rows).toEqual(['continue', 'save', 'share', 'report', 'delete'].map(action => `sheet-card-${CARD}-${action}`));
   expect(view.queryByTestId('video-viewer')).toBeNull();
 
   // Share hands the clip's own file to the system share sheet, once the sheet has closed.

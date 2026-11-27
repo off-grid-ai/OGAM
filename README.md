@@ -12,7 +12,7 @@ Anonymous stats and crash reports are off unless you turn them on, and never inc
 
 [![GitHub stars](https://img.shields.io/github/stars/off-grid-ai/OGAM?style=social)](https://github.com/off-grid-ai/OGAM)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Google Play](https://img.shields.io/badge/Google%20Play-Download-brightgreen?logo=google-play)](https://play.google.com/store/apps/details?id=ai.offgridmobile)
+[![Android APK](https://img.shields.io/badge/Android-Download%20APK-brightgreen?logo=android)](https://github.com/off-grid-ai/OGAM/releases/latest)
 [![App Store](https://img.shields.io/badge/App%20Store-Download-blue?logo=apple)](https://apps.apple.com/us/app/off-grid-local-ai/id6759299882)
 [![Platform](https://img.shields.io/badge/Platform-Android%20%7C%20iOS%20%7C%20macOS-green.svg)](#install)
 [![codecov](https://codecov.io/gh/off-grid-ai/OGAM/graph/badge.svg)](https://codecov.io/gh/off-grid-ai/OGAM)
@@ -134,11 +134,11 @@ Tested on Snapdragon 8 Gen 2/3, Apple A17 Pro. Results vary by model size and qu
 <div align="center">
 <table><tr>
 <td align="center"><a href="https://apps.apple.com/us/app/off-grid-local-ai/id6759299882"><img src="https://developer.apple.com/assets/elements/badges/download-on-the-app-store.svg" alt="Download on the App Store" width="180" /></a></td>
-<td align="center"><a href="https://play.google.com/store/apps/details?id=ai.offgridmobile"><img src="https://play.google.com/intl/en_us/badges/static/images/badges/en_badge_web_generic.png" alt="Get it on Google Play" width="220" /></a></td>
+<td align="center"><a href="https://github.com/off-grid-ai/OGAM/releases/latest"><img src="https://img.shields.io/badge/Android-Download%20APK-3DDC84?logo=android&logoColor=white&style=for-the-badge" alt="Download the Android APK" height="54" /></a></td>
 </tr></table>
 </div>
 
-Or grab the latest APK from [**GitHub Releases**](https://github.com/off-grid-ai/OGAM/releases/latest).
+On Android, install the APK from the [**latest GitHub release**](https://github.com/off-grid-ai/OGAM/releases/latest).
 
 > **macOS**: The iOS App Store version runs natively on Apple Silicon Macs via Mac Catalyst / iPad compatibility.
 

@@ -92,7 +92,12 @@ jobs:
           fi
 
           # Write release notes
-          echo "## What's Changed" > release-notes.md
+          echo "## Which APK" > release-notes.md
+          echo "" >> release-notes.md
+          echo "- **OffgridMobile-v${{ env.NEW_VERSION }}.apk**: small. Downloads the chat model the first time you open it." >> release-notes.md
+          echo "- **OffgridMobile-v${{ env.NEW_VERSION }}-with-model.apk**: about 1.5 GB more, with the chat model inside. Chats with no network at all." >> release-notes.md
+          echo "" >> release-notes.md
+          echo "## What's Changed" >> release-notes.md
           echo "" >> release-notes.md
           echo "$COMMITS" >> release-notes.md
           echo "" >> release-notes.md
@@ -124,11 +129,17 @@ jobs:
         run: |
           cd android
           ./gradlew assembleRelease
-
-      - name: Rename APK
-        run: |
-          mv android/app/build/outputs/apk/release/app-release.apk \
-             android/app/build/outputs/apk/release/OffgridMobile-v${{ env.NEW_VERSION }}.apk
+          mv app/build/outputs/apk/release/app-release.apk \
+             app/build/outputs/apk/release/OffgridMobile-v${{ env.NEW_VERSION }}.apk
+          # The AAB (what Play takes) rides every release too, whether or not Play accepts it.
+          ./gradlew bundleRelease
+          mv app/build/outputs/bundle/release/app-release.aab \
+             app/build/outputs/apk/release/OffgridMobile-v${{ env.NEW_VERSION }}.aab
+          # The same app with the chat model inside (about 1.5 GB more): it chats with no network at all.
+          # The plain APK fetches the same model at first open.
+          ./gradlew assembleRelease -PmodelInApk
+          mv app/build/outputs/apk/release/app-release.apk \
+             app/build/outputs/apk/release/OffgridMobile-v${{ env.NEW_VERSION }}-with-model.apk
 
       - name: Create GitHub Release
         env:
@@ -136,6 +147,8 @@ jobs:
         run: |
           gh release create v${{ env.NEW_VERSION }} \
             android/app/build/outputs/apk/release/OffgridMobile-v${{ env.NEW_VERSION }}.apk \
+            android/app/build/outputs/apk/release/OffgridMobile-v${{ env.NEW_VERSION }}-with-model.apk \
+            android/app/build/outputs/apk/release/OffgridMobile-v${{ env.NEW_VERSION }}.aab \
             --title "Off Grid v${{ env.NEW_VERSION }}" \
             --notes-file release-notes.md
 
@@ -168,7 +181,13 @@ jobs:
           ORG_GRADLE_PROJECT_OFFGRID_UPLOAD_STORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           ORG_GRADLE_PROJECT_OFFGRID_UPLOAD_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           ORG_GRADLE_PROJECT_OFFGRID_UPLOAD_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
-        run: bundle exec fastlane android release
+        # Play refuses every upload while the app is suspended there. The release still ships (GitHub
+        # release with APKs + AAB, then iOS); set PLAY_UPLOAD_REQUIRED=1 once the listing is back.
+        run: |
+          if ! bundle exec fastlane android release; then
+            [ "${{ vars.PLAY_UPLOAD_REQUIRED }}" = 1 ] && exit 1
+            echo "::warning title=Play upload skipped::Play refused the upload (app suspended). The APKs and AAB are on the GitHub release."
+          fi
 
       # Announce the release in Slack: the GitHub release link + the notes generated above.
       # Fail-soft (notify script always exits 0), so a Slack outage never fails a release.

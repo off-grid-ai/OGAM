@@ -288,6 +288,41 @@ describe('the licence this phone holds', () => {
       });
     });
 
+    it('sets up the activation owner itself when launch could not', async () => {
+      const provider = load();
+      const mesh = activationOwner();
+      let attempts = 0;
+      // Launch's one attempt failed (an OS update broke a Keystore key), so no owner is there. Activate asks
+      // again, and this time it comes up.
+      provider.setDirectEntitlementActivationPreparer(async () => {
+        attempts += 1;
+        provider.setDirectEntitlementActivationOwner(mesh.owner);
+      });
+
+      await expect(
+        provider.proLicenseProvider.activate!(LICENCE_KEY),
+      ).resolves.toEqual({ ok: true });
+      expect(attempts).toBe(1);
+      expect(mesh.calls).toEqual(['prepare', 'commit', 'finalize']);
+    });
+
+    it('still waits for the owner when setting it up again fails', async () => {
+      jest.useFakeTimers();
+      const provider = load();
+      const mesh = activationOwner();
+      provider.setDirectEntitlementActivationPreparer(async () => {
+        throw new Error('Wrapped error: Keystore operation failed');
+      });
+
+      const activation = provider.proLicenseProvider.activate!(LICENCE_KEY);
+      setTimeout(
+        () => provider.setDirectEntitlementActivationOwner(mesh.owner),
+        2_000,
+      );
+      await jest.advanceTimersByTimeAsync(2_000);
+      await expect(activation).resolves.toEqual({ ok: true });
+    });
+
     it('lets the mesh be swapped out and put back', async () => {
       const provider = load();
       const first = activationOwner();

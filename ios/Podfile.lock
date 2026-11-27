@@ -9,7 +9,7 @@ PODS:
   - hermes-engine (0.14.0):
     - hermes-engine/Pre-built (= 0.14.0)
   - hermes-engine/Pre-built (0.14.0)
-  - llama-rn (0.13.0-b12560):
+  - llama-rn (0.13.0-b12722):
     - boost
     - DoubleConversion
     - fast_float
@@ -75,6 +75,7 @@ PODS:
     - ReactCommon/turbomodule/core
     - SocketRocket
     - Yoga
+  - opencv-rne (4.11.0)
   - RCT-Folly (2024.11.18.00):
     - boost
     - DoubleConversion
@@ -2079,6 +2080,7 @@ PODS:
     - fmt
     - glog
     - hermes-engine
+    - opencv-rne (~> 4.11.0)
     - RCT-Folly
     - RCT-Folly/Fabric
     - RCTRequired
@@ -3828,6 +3830,7 @@ SPEC REPOS:
     - CocoaAsyncSocket
     - MMKV
     - MMKVCore
+    - opencv-rne
     - SocketRocket
     - SSZipArchive
 
@@ -4075,13 +4078,14 @@ SPEC CHECKSUMS:
   fmt: a40bb5bd0294ea969aaaba240a927bd33d878cdd
   glog: 5683914934d5b6e4240e497e0f4a3b42d1854183
   hermes-engine: f85e00f9677c37fbf39c61d75ec89a2d30350643
-  llama-rn: bb5c698bf836243ef93e10a7149379b5e7e89b60
+  llama-rn: 087a86920ab084c8e902d2a8efd4bac68b96dcd1
   MMKV: 86859fdfa2b0b21db1fd6e48788474a6416a2c77
   MMKVCore: 3d16ce9f7d411e135020915fde98a056859a1efa
   OffgridFilm: d93b098e7b123a8f4b3d10145a3736cf38ff1481
   OffgridFonts: 87795a98c22febe3522026106a8a097117982113
   OffgridVideo: 3a0d4acebd54e2ab315c9ff737aa017ccc3d36b8
   op-sqlite: ab292d8057b994f220b8c61f2683f5ff9286958e
+  opencv-rne: 2305807573b6e29c8c87e3416ab096d09047a7a0
   RCT-Folly: 846fda9475e61ec7bcbf8a3fe81edfcaeb090669
   RCTDeprecation: a41bbdd9af30bf2e5715796b313e44ec43eefff1
   RCTRequired: 7be34aabb0b77c3cefe644528df0fa0afad4e4d0
@@ -4122,7 +4126,7 @@ SPEC CHECKSUMS:
   react-native-blob-util: 0889ba082222c5b3372cf632b825fe575c1e1d9a
   react-native-document-picker: dc2d83366e47e89e7c51e8a41eab99c1d54e941c
   react-native-document-viewer: 8c6ed07e7e27352743fa98e8dd6d288ad925b884
-  react-native-executorch: 47b739f5fef1650a46b47777ffacbc7195684b0d
+  react-native-executorch: cf7a34e3769f4adc32cfc527232ef78fccb827af
   react-native-get-random-values: d16467cf726c618e9c7a8c3c39c31faa2244bbba
   react-native-image-picker: 0314366753615115fa55c3cc937ac44cb7e75702
   react-native-in-app-review: 1516ba69d60d58053b7eb3aaaf8d2a5a74af8b57

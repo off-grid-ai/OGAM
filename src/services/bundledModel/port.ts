@@ -28,6 +28,9 @@ export interface BundledModelPort {
   /** Android's pack files are ours to move (a rename). iOS keeps them in system-managed storage, so the
    *  app copies them out and then lets the system remove the pack. */
   canMoveFiles: boolean;
+  /** The app's own native module answers. Every app build has it (Android, iOS 17+); only code running
+   *  outside the app (tests, the web translation preview) has none, and there nothing is downloaded. */
+  inApp: boolean;
   getPacks(names: readonly string[]): Promise<Record<string, PackState>>;
   fetch(names: readonly string[]): Promise<Record<string, PackState>>;
   removePack(name: string): Promise<boolean>;
@@ -45,6 +48,7 @@ function absent(names: readonly string[]): Record<string, PackState> {
 /** No pack system on this platform: nothing ever arrives. */
 const noPacks: BundledModelPort = {
   canMoveFiles: false,
+  inApp: false,
   getPacks: async names => absent(names),
   fetch: async names => absent(names),
   removePack: async () => false,
@@ -59,6 +63,7 @@ function nativePort(canMoveFiles: boolean, native: {
   const emitter = new NativeEventEmitter(native as never);
   return {
     canMoveFiles,
+    inApp: true,
     getPacks: names => native.getPacks([...names]),
     fetch: names => native.fetch([...names]),
     removePack: name => native.removePack(name),

@@ -32,6 +32,7 @@ import type { ThemeColors, ThemeShadows } from '../theme';
 import { useGetPro } from '../hooks/useGetPro';
 import { takeChatModelOnHand, useChatModelOnHand } from '../services/arrivingChatModel';
 import { t } from '@offgrid/i18n';
+import { PickedChips } from './OnboardingPicks/PickedChips';
 
 const productionSessionFactory = (): AutoSetupSession =>
   createAutoSetupSession();
@@ -154,6 +155,11 @@ export const AutoSetupScreen: React.FC<Props> = ({
     // started earlier) is the chat model: open the chat for it rather than download a second one.
     // A plan picked by name is downloaded as asked.
     if (!tier && takeChatModelOnHand()) {
+      // The person's other picks (pictures, voice) still come, in the background, beside that model.
+      if (quickStartExtraBytes > 0) {
+        if (session.snapshot().selectedKinds.includes('text')) session.toggleKind('text');
+        await session.startInBackground().catch(ignore);
+      }
       navigation.reset({ index: 1, routes: [{ name: 'Main' }, { name: 'Chat', params: {} }] });
       return;
     }
@@ -216,6 +222,7 @@ export const AutoSetupScreen: React.FC<Props> = ({
             <Text style={styles.secondary}>
               {heroLine}
             </Text>
+            <PickedChips />
             {quickStartExtraBytes > 0 && (
               <Text style={styles.secondary} testID="auto-setup-extras">
                 {`Your other picks (${formatBytes(quickStartExtraBytes)}) download in the background.`}

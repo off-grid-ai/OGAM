@@ -272,6 +272,63 @@ describe('the devices this phone trusts', () => {
     });
   });
 
+  describe('after an OS update breaks the Keystore key (Android 17)', () => {
+    const KEYSTORE_ERROR = 'Wrapped error: Keystore operation failed';
+
+    /** The pairings' Keystore key fails every read and write until the entry is reset. */
+    const breakPairingsKey = (): void => {
+      const secure = keychain();
+      let broken = true;
+      const get = secure.getGenericPassword.getMockImplementation()!;
+      const set = secure.setGenericPassword.getMockImplementation()!;
+      secure.getGenericPassword.mockImplementation(
+        async (options: { service: string }) => {
+          if (broken && options.service === KEYCHAIN_SERVICE) {
+            throw new Error(KEYSTORE_ERROR);
+          }
+          return get(options);
+        },
+      );
+      secure.setGenericPassword.mockImplementation(
+        async (user: string, password: string, options: { service: string }) => {
+          if (broken && options.service === KEYCHAIN_SERVICE) {
+            throw new Error(KEYSTORE_ERROR);
+          }
+          return set(user, password, options);
+        },
+      );
+      secure.resetGenericPassword.mockImplementation(
+        async ({ service }: { service: string }) => {
+          if (service === KEYCHAIN_SERVICE) broken = false;
+          return vault.delete(service);
+        },
+      );
+    };
+
+    it('starts with no pairings instead of failing every launch', async () => {
+      await trusted();
+      breakPairingsKey();
+
+      store.resetCache();
+      await store.load();
+
+      // The old pairings are behind a key nothing can read: sync and licence activation start again,
+      // and the devices pair again.
+      expect(store.list()).toEqual([]);
+      expect(vault.has(KEYCHAIN_SERVICE)).toBe(false);
+    });
+
+    it('saves a new pairing after the reset', async () => {
+      breakPairingsKey();
+      await trusted();
+
+      store.resetCache();
+      await store.load();
+
+      expect(store.get('the-mac')).toBe('the-shared-secret');
+    });
+  });
+
   describe('a peer that did not recognise this device', () => {
     it('keeps the secret and asks for a repair instead of the code', async () => {
       await trusted();

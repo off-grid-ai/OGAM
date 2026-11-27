@@ -363,10 +363,12 @@ export const ImageViewerModal: React.FC<{
   onSave: () => void;
   /** Shares the picture with the Off Grid AI mark through the system share sheet. */
   onShare?: () => void;
+  /** A generated picture can be reported (Play AI-generated content policy). */
+  onReport?: () => void;
   /** Video is Pro: "Animate this photo" fills this slot. */
   AnimateAction?: React.ComponentType<any>;
   conversationId?: string | null;
-}> = ({ styles, colors, viewerImageUri, onClose, onSave, onShare, AnimateAction, conversationId }) => {
+}> = ({ styles, colors, viewerImageUri, onClose, onSave, onShare, onReport, AnimateAction, conversationId }) => {
   const insets = useSafeAreaInsets();
   return (
     <Modal visible={!!viewerImageUri} transparent animationType="fade" onRequestClose={onClose}>
@@ -404,6 +406,17 @@ export const ImageViewerModal: React.FC<{
                   testID="image-viewer-share"
                 >
                   <Icon name="share" size={24} color={colors.text} />
+                </TouchableOpacity>
+              )}
+              {onReport && (
+                <TouchableOpacity
+                  style={styles.imageViewerButton}
+                  onPress={onReport}
+                  accessibilityRole="button"
+                  accessibilityLabel="Report"
+                  testID="image-viewer-report"
+                >
+                  <Icon name="flag" size={24} color={colors.text} />
                 </TouchableOpacity>
               )}
               <TouchableOpacity

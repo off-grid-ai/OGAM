@@ -97,8 +97,8 @@ android {
         applicationId "ai.offgridmobile"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1794999733
-        versionName "0.0.125"
+        versionCode 1795567689
+        versionName "0.0.127"
         // An engine pack fits only the llama.rn Java/JS bridge this APK carries (see enginepack/).
         def llamaRn = new groovy.json.JsonSlurper().parse(file("../../node_modules/llama.rn/package.json"))
         buildConfigField "String", "LLAMA_ENGINE_BRIDGE", "\"${llamaRn.offgrid?.engineBridge ?: ''}\""
@@ -165,6 +165,39 @@ android {
     }
 }
 
+// The "with model" APK on GitHub releases: -PmodelInApk puts the bundled chat model's files inside the APK
+// under assets/<pack>/ (hard links to the packs' fetched files), so the app has it with no network at all.
+// BundledModelModule copies them out once and reports them as arrived packs. Without the flag (Play's
+// bundle, the plain APK) nothing changes.
+if (project.hasProperty("modelInApk")) {
+    def modelAssets = layout.buildDirectory.dir("model-in-apk/assets")
+    def packs = ["chat_model", "chat_mmproj"]
+    def linkModelIntoApk = tasks.register("linkModelIntoApk") {
+        dependsOn(packs.collect { ":${it}:fetchBundledModel" })
+        outputs.dir(modelAssets)
+        doLast {
+            packs.each { pack ->
+                def out = new File(modelAssets.get().asFile, pack)
+                out.mkdirs()
+                file("${rootDir}/${pack}/src/main/assets").eachFile { src ->
+                    def dest = new File(out, src.name)
+                    if (dest.exists() && dest.length() == src.length()) return
+                    dest.delete()
+                    try {
+                        java.nio.file.Files.createLink(dest.toPath(), src.toPath())
+                    } catch (Exception ignored) {
+                        java.nio.file.Files.copy(src.toPath(), dest.toPath())
+                    }
+                }
+            }
+        }
+    }
+    android.sourceSets.main.assets.srcDir(modelAssets)
+    tasks.matching { it.name.startsWith("merge") && it.name.endsWith("Assets") }.configureEach {
+        dependsOn(linkModelIntoApk)
+    }
+}
+
 configurations.all {
     exclude group: 'com.android.support'
 }
@@ -192,7 +225,7 @@ dependencies {
     implementation("io.legere:pdfiumandroid:1.0.35")
 
     // LiteRT-LM on-device LLM inference (pinned — do not use latest.release)
-    implementation("com.google.ai.edge.litertlm:litertlm-android:0.19.1")
+    implementation("com.google.ai.edge.litertlm:litertlm-android:0.20.0")
 
     // Download layer — Room + WorkManager + OkHttp
     def room_version = "2.8.2"
