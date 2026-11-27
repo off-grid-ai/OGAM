@@ -26,6 +26,16 @@ import { getWebSearchKey, removeWebSearchKey, saveWebSearchKey } from '../servic
 
 type Check = { state: 'idle' } | { state: 'testing' } | { state: 'done'; result: WebSearchTestResult };
 
+/** An icon button on the saved-key row: the glyph is enough, the label is for screen readers. */
+const KeyAction: React.FC<{ icon: string; label: string; onPress: () => void; testID: string }> = ({ icon, label, onPress, testID }) => {
+  const { colors } = useTheme();
+  return (
+    <TouchableOpacity onPress={onPress} testID={testID} accessibilityRole="button" accessibilityLabel={label} hitSlop={12} style={{ padding: SPACING.sm }}>
+      <Icon name={icon} size={18} color={colors.textSecondary} />
+    </TouchableOpacity>
+  );
+};
+
 /**
  * Tools → Web search. Where a model's searches go: the free built-in search, the person's own SearXNG
  * server, or their own Brave Search or Tavily key. A pick applies at once; Test saves what was typed
@@ -169,8 +179,8 @@ export const WebSearchSettingsScreen: React.FC = () => {
               <View style={[styles.group, styles.row]} testID="web-search-key-saved">
                 <Icon name="lock" size={16} color={colors.textSecondary} />
                 <Text style={[styles.rowTitle, styles.rowText]}>{WEB_SEARCH_COPY.keySaved}</Text>
-                <Button title={WEB_SEARCH_COPY.replaceKey} variant="ghost" size="small" onPress={() => setReplacing(true)} testID="web-search-replace-key" />
-                <Button title={WEB_SEARCH_COPY.removeKey} variant="ghost" size="small" onPress={removeKey} testID="web-search-remove-key" />
+                <KeyAction icon="edit-2" label={WEB_SEARCH_COPY.replaceKey} onPress={() => setReplacing(true)} testID="web-search-replace-key" />
+                <KeyAction icon="trash-2" label={WEB_SEARCH_COPY.removeKey} onPress={removeKey} testID="web-search-remove-key" />
               </View>
             )}
           </>
