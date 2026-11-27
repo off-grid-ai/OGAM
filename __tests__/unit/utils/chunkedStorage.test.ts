@@ -1,4 +1,4 @@
-import { createChunkedStorage, type ChunkStore } from '../../../src/utils/chunkedStorage';
+import { createChunkedStorage, unreadableKey, type ChunkStore } from '../../../src/utils/chunkedStorage';
 
 /** An in-memory AsyncStorage whose single-key read refuses rows over a limit, like Android's cursor window. */
 function memoryStore(readLimit = Infinity, initial: Record<string, string> = {}) {
@@ -19,6 +19,7 @@ function memoryStore(readLimit = Infinity, initial: Record<string, string> = {})
     multiRemove: async keys => {
       for (const key of keys) values.delete(key);
     },
+    getAllKeys: async () => [...values.keys()],
   };
   return { store, values };
 }
@@ -59,7 +60,8 @@ describe('chunked storage', () => {
 
     await storage.setItem('chat', 'short');
 
-    expect([...values.keys()].sort()).toEqual(['chat', 'chat::chunk:0']);
+    expect([...values.keys()]).toHaveLength(2);
+    expect([...values.keys()].filter(key => key.startsWith('chat::chunk:'))).toHaveLength(1);
     expect(await createChunkedStorage(store).getItem('chat')).toBe('short');
   });
 
@@ -80,11 +82,61 @@ describe('chunked storage', () => {
     expect(await createChunkedStorage(store).getItem('chat')).toBe(history);
   });
 
-  it('fails the read rather than return part of a history', async () => {
+  it('never returns part of a history: a value missing a part is kept aside and the store starts afresh', async () => {
     const { store, values } = memoryStore();
     await createChunkedStorage(store).setItem('chat', 'x'.repeat(2 * 256 * 1024));
-    values.delete('chat::chunk:1');
+    const partKey = [...values.keys()].find(key => key.endsWith(':1'))!;
+    values.delete(partKey);
+    const manifest = values.get('chat');
 
-    await expect(createChunkedStorage(store).getItem('chat')).rejects.toThrow(/missing/);
+    expect(await createChunkedStorage(store).getItem('chat')).toBeNull();
+    expect(values.get(unreadableKey('chat'))).toBe(manifest);
+  });
+
+  it('keeps the last whole save when the app is killed before a save finishes', async () => {
+    const { store, values } = memoryStore();
+    await createChunkedStorage(store).setItem('chat', '{"saved":"first"}');
+    // Killed after the new parts landed and before the manifest moved to them.
+    const killed: ChunkStore = {
+      ...store,
+      multiSet: async pairs => {
+        if (pairs.some(([key]) => key === 'chat')) throw new Error('killed');
+        await store.multiSet(pairs);
+      },
+    };
+    await expect(createChunkedStorage(killed).setItem('chat', '{"saved":"second"}')).rejects.toThrow('killed');
+
+    const relaunched = createChunkedStorage(store);
+    expect(await relaunched.getItem('chat')).toBe('{"saved":"first"}');
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect([...values.keys()].filter(key => key.startsWith('chat::chunk:'))).toHaveLength(1);
+  });
+
+  it('keeps an older history whose parts came from two saves aside, then saves afresh', async () => {
+    // How an older build left a phone: parts rewritten in place, the app killed between two of them.
+    const { store, values } = memoryStore(LIMIT, {
+      chat: 'offgrid-chunked:v1:2',
+      'chat::chunk:0': '{"conversations":[{"id":"a","title":"fir',
+      'chat::chunk:1': '":"b"}]}',
+    });
+    const storage = createChunkedStorage(store);
+
+    expect(await storage.getItem('chat')).toBeNull();
+    await storage.setItem('chat', '{"conversations":[]}');
+
+    expect(await createChunkedStorage(store).getItem('chat')).toBe('{"conversations":[]}');
+    expect(values.get(unreadableKey('chat'))).toBe('offgrid-chunked:v1:2');
+    expect(values.get('chat::chunk:0')).toBe('{"conversations":[{"id":"a","title":"fir');
+    expect(values.get('chat::chunk:1')).toBe('":"b"}]}');
+  });
+
+  it('reads a whole history an older build saved in parts', async () => {
+    const { store } = memoryStore(LIMIT, {
+      chat: 'offgrid-chunked:v1:2',
+      'chat::chunk:0': '{"conversations":',
+      'chat::chunk:1': '[]}',
+    });
+
+    expect(await createChunkedStorage(store).getItem('chat')).toBe('{"conversations":[]}');
   });
 });
