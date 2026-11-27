@@ -319,23 +319,8 @@ describe('Tool Handlers', () => {
         return asked;
       }
 
-      it('reads the results from Bing first', async () => {
+      it('reads the results from DuckDuckGo Lite first, asked by POST', async () => {
         const asked = answer({
-          'https://www.bing.com': { status: 200, body: BING },
-        });
-
-        const result = await runTool('web_search', { query: 'python asyncio' });
-
-        expect(result.content).toContain(
-          '[Python & asyncio](https://docs.python.org/asyncio)',
-        );
-        expect(result.content).toContain('Async I/O in Python.');
-        expect(asked).toEqual(['https://www.bing.com']);
-      });
-
-      it('asks DuckDuckGo when Bing refuses', async () => {
-        const asked = answer({
-          'https://www.bing.com': { status: 429, body: '' },
           'https://lite.duckduckgo.com': { status: 200, body: DDG_LITE },
         });
 
@@ -347,16 +332,48 @@ describe('Tool Handlers', () => {
         expect(result.content).toContain(
           'asyncio lets you write concurrent code.',
         );
+        expect(asked).toEqual(['https://lite.duckduckgo.com']);
+      });
+
+      it('asks Bing when DuckDuckGo refuses', async () => {
+        const asked = answer({
+          'https://lite.duckduckgo.com': { status: 202, body: CAPTCHA },
+          'https://www.bing.com': { status: 200, body: BING },
+        });
+
+        const result = await runTool('web_search', { query: 'python asyncio' });
+
+        expect(result.content).toContain(
+          '[Python & asyncio](https://docs.python.org/asyncio)',
+        );
+        expect(result.content).toContain('Async I/O in Python.');
         expect(asked).toEqual([
-          'https://www.bing.com',
           'https://lite.duckduckgo.com',
+          'https://www.bing.com',
+        ]);
+      });
+
+      it('passes over Bing results that have nothing to do with the search', async () => {
+        const asked = answer({
+          'https://lite.duckduckgo.com': { status: 202, body: CAPTCHA },
+          'https://www.bing.com': { status: 200, body: BING },
+          'https://search.brave.com': { status: 429, body: CAPTCHA },
+        });
+
+        const result = await runTool('web_search', { query: 'weather mumbai' });
+
+        expect(result.error).toContain('Web search is unavailable right now');
+        expect(asked).toEqual([
+          'https://lite.duckduckgo.com',
+          'https://www.bing.com',
+          'https://search.brave.com',
         ]);
       });
 
       it('takes a bot check as a refusal, not as a page with no results', async () => {
         answer({
-          'https://www.bing.com': { status: 503, body: '' },
           'https://lite.duckduckgo.com': { status: 202, body: CAPTCHA },
+          'https://www.bing.com': { status: 503, body: '' },
           'https://search.brave.com': { status: 429, body: CAPTCHA },
         });
 

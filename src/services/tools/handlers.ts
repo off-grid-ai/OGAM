@@ -7,6 +7,14 @@ import { useDocumentTurnStatusStore } from '../documents/progressStore';
 import type * as DocumentChatTurn from '../documents/chatTurn';
 import logger from '../../utils/logger';
 import { featureUsed } from '../analytics/analytics';
+import {
+  DEFAULT_WEB_SEARCH_SETTINGS,
+  formatWebSearchResults,
+  searchWeb,
+  webSearchNeeds,
+} from '@offgrid/models';
+import { useAppStore } from '../../stores/appStore';
+import { getWebSearchKey } from '../webSearchKey';
 import { toolFeature } from '../analytics/values';
 
 function makeResult(
@@ -97,248 +105,19 @@ async function dispatchTool(call: ToolCall): Promise<string> {
 }
 
 /**
- * Search providers in the order they are asked. Brave's results page started answering scripted
- * requests with HTTP 429 and a captcha, so every search failed ("tell Gemma to perform a web search
- * it fails"). Bing's RSS feed and DuckDuckGo Lite answer plain requests; Brave stays last.
+ * Web search: providers, order, parsing and the "unavailable" rule live in @offgrid/models, the same as
+ * on the computer. This brings the person's choice from settings and their key from the Keychain.
  */
-const SEARCH_TIMEOUT_MS = 8000;
-const PLAIN_AGENT = 'Mozilla/5.0';
-const BROWSER_AGENT =
-  'Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36';
-
-interface SearchProvider {
-  name: string;
-  request(query: string): { url: string; init: RequestInit };
-  parse(body: string): SearchResult[];
-}
-
-const SEARCH_PROVIDERS: readonly SearchProvider[] = [
-  {
-    name: 'bing',
-    request: q => ({
-      url: `https://www.bing.com/search?format=rss&q=${encodeURIComponent(q)}`,
-      init: {
-        headers: { 'User-Agent': PLAIN_AGENT, Accept: 'application/rss+xml' },
-      },
-    }),
-    parse: parseBingRss,
-  },
-  {
-    name: 'duckduckgo',
-    request: q => ({
-      url: 'https://lite.duckduckgo.com/lite/',
-      init: {
-        method: 'POST',
-        headers: {
-          'User-Agent': PLAIN_AGENT,
-          'Content-Type': 'application/x-www-form-urlencoded',
-        },
-        body: `q=${encodeURIComponent(q)}`,
-      },
-    }),
-    parse: parseDuckDuckGoLite,
-  },
-  {
-    name: 'brave',
-    request: q => ({
-      url: `https://search.brave.com/search?q=${encodeURIComponent(
-        q,
-      )}&source=web`,
-      init: { headers: { 'User-Agent': BROWSER_AGENT, Accept: 'text/html' } },
-    }),
-    parse: parseBraveResults,
-  },
-];
-
-/** A bot check served instead of results: the provider refused, whatever the status says. */
-function isChallengePage(body: string): boolean {
-  return /anomaly-modal|captcha/i.test(body);
-}
-
-type ProviderOutcome = { results: SearchResult[] } | { refused: string };
-
-async function askProvider(
-  provider: SearchProvider,
-  query: string,
-): Promise<ProviderOutcome> {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), SEARCH_TIMEOUT_MS);
-  try {
-    const { url, init } = provider.request(query);
-    const response = await fetch(url, { ...init, signal: controller.signal });
-    if (response.status >= 400) return { refused: `HTTP ${response.status}` };
-    const body = await response.text();
-    if (isChallengePage(body)) return { refused: 'a bot check' };
-    return { results: provider.parse(body) };
-  } catch (error) {
-    return { refused: error instanceof Error ? error.message : String(error) };
-  } finally {
-    clearTimeout(timeout);
-  }
-}
-
 async function handleWebSearch(query: string): Promise<string> {
-  const refusals: string[] = [];
-  let anyAnswered = false;
-  for (const provider of SEARCH_PROVIDERS) {
-    const outcome = await askProvider(provider, query);
-    if ('refused' in outcome) {
-      logger.warn(`[web_search] ${provider.name} refused: ${outcome.refused}`);
-      refusals.push(outcome.refused);
-      continue;
-    }
-    anyAnswered = true;
-    if (outcome.results.length > 0) {
-      return outcome.results
-        .slice(0, 5)
-        .map((r, i) => {
-          const heading = r.url ? `[${r.title}](${r.url})` : r.title;
-          return `${i + 1}. ${heading}\n   ${r.snippet}`;
-        })
-        .join('\n\n');
-    }
-  }
-  // A refused or rate-limited search has no results to read. Say the search failed, instead of telling
-  // the model that the web has nothing on this query.
-  if (!anyAnswered) {
-    throw new Error(
-      `Web search is unavailable right now (${
-        refusals[refusals.length - 1] ?? 'no answer'
-      }).`,
-    );
-  }
-  return `No results found for "${query}".`;
-}
-
-type SearchResult = { title: string; snippet: string; url?: string };
-
-function stripHtmlTags(html: string): string {
-  let result = '';
-  let inTag = false;
-  for (const ch of html) {
-    if (ch === '<') {
-      inTag = true;
-      continue;
-    }
-    if (ch === '>') {
-      inTag = false;
-      continue;
-    }
-    if (!inTag) result += ch;
-  }
-  return result;
-}
-
-function parseResultBlock(block: string): SearchResult | null {
-  const urlMatch = block.match(/<a[^>]*href="(https?:\/\/[^"]+)"/);
-  const url = urlMatch ? decodeHTMLEntities(urlMatch[1]) : '';
-
-  const titleMatch =
-    block.match(/class="[^"]*title[^"]*"[^>]*>([^<]+)</) ||
-    block.match(/<a[^>]*href="https?:\/\/[^"]*"[^>]*>\s*<span[^>]*>([^<]+)/);
-  const title = titleMatch ? decodeHTMLEntities(titleMatch[1].trim()) : '';
-
-  const snippetMatch =
-    block.match(/class="snippet[^"]*"[^>]*>([\s\S]*?)<\/p>/) ||
-    block.match(/class="snippet[^"]*"[^>]*>([\s\S]*?)<\/span>/);
-  const snippet = snippetMatch
-    ? decodeHTMLEntities(stripHtmlTags(snippetMatch[1]).trim())
-    : '';
-
-  if (!title && !snippet) return null;
-  return {
-    title: title || '(no title)',
-    snippet: snippet || '(no snippet)',
-    url,
-  };
-}
-
-function textOf(fragment: string): string {
-  // RSS escapes the markup inside it (&lt;b&gt;), so decode before taking the tags out.
-  return decodeHTMLEntities(stripHtmlTags(decodeHTMLEntities(fragment)))
-    .replaceAll(/\s+/g, ' ')
-    .trim();
-}
-
-function parseBingRss(xml: string): SearchResult[] {
-  const results: SearchResult[] = [];
-  for (const item of xml.split('<item>').slice(1)) {
-    if (results.length >= 5) break;
-    const title = /<title>([\s\S]*?)<\/title>/i.exec(item)?.[1];
-    const url = /<link>([\s\S]*?)<\/link>/i.exec(item)?.[1];
-    if (!title || !url) continue;
-    const description =
-      /<description>([\s\S]*?)<\/description>/i.exec(item)?.[1] ?? '';
-    results.push({
-      title: textOf(title),
-      url: textOf(url),
-      snippet: textOf(description) || '(no snippet)',
-    });
-  }
-  return results;
-}
-
-function parseDuckDuckGoLite(html: string): SearchResult[] {
-  const links = [
-    ...html.matchAll(
-      /<a[^>]*href="(https?:\/\/[^"]+)"[^>]*class='result-link'[^>]*>([\s\S]*?)<\/a>/g,
-    ),
-  ];
-  const snippets = [
-    ...html.matchAll(/class='result-snippet'[^>]*>([\s\S]*?)<\/td>/g),
-  ];
-  return links.slice(0, 5).map((m, i) => ({
-    title: textOf(m[2]),
-    url: decodeHTMLEntities(m[1]),
-    snippet: snippets[i] ? textOf(snippets[i][1]) : '(no snippet)',
-  }));
-}
-
-function parseBraveResults(html: string): SearchResult[] {
-  const results: SearchResult[] = [];
-  const blocks = html.split(/class="result-wrapper/).slice(1);
-
-  for (const block of blocks) {
-    if (results.length >= 5) break;
-    const parsed = parseResultBlock(block);
-    if (parsed) results.push(parsed);
-  }
-
-  if (results.length === 0) {
-    const linkPattern =
-      /<a[^>]*href="(https?:\/\/(?!search\.brave)[^"]*)"[^>]*>([^<]{10,})<\/a>/g;
-    let match;
-    while ((match = linkPattern.exec(html)) !== null && results.length < 5) {
-      const title = decodeHTMLEntities(match[2].trim());
-      if (!title.includes('Brave')) {
-        results.push({ title, snippet: '', url: match[1] });
-      }
-    }
-  }
-
-  return results;
-}
-
-const NAMED_HTML_ENTITIES: Readonly<Record<string, string>> = {
-  amp: '&',
-  lt: '<',
-  gt: '>',
-  quot: '"',
-  apos: "'",
-  nbsp: ' ',
-};
-
-function decodeHTMLEntities(text: string): string {
-  return text.replaceAll(
-    /&(#x[0-9a-fA-F]+|#\d+|[a-zA-Z]+);/g,
-    (entity, body: string) => {
-      if (body.startsWith('#x'))
-        return String.fromCodePoint(Number.parseInt(body.slice(2), 16));
-      if (body.startsWith('#'))
-        return String.fromCodePoint(Number(body.slice(1)));
-      return NAMED_HTML_ENTITIES[body] ?? entity;
-    },
-  );
+  const settings = useAppStore.getState().settings.webSearch ?? DEFAULT_WEB_SEARCH_SETTINGS;
+  const apiKey = webSearchNeeds(settings.provider) === 'key' ? await getWebSearchKey(settings.provider).catch(() => null) : null;
+  const { results } = await searchWeb(query, {
+    fetch,
+    settings,
+    apiKey,
+    onRefused: (provider, reason) => logger.warn(`[web_search] ${provider} refused: ${reason}`),
+  });
+  return formatWebSearchResults(query, results);
 }
 
 /**

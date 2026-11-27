@@ -1,4 +1,4 @@
-import type { ImageParameterStore } from '@offgrid/models';
+import type { ImageParameterStore, WebSearchSettings } from '@offgrid/models';
 import type { ModalityName, ProcessorPlace } from '../types';
 import { videoModelDisplayName } from '../utils/modelHelpers';
 import type {
@@ -128,6 +128,9 @@ export type AppSettings = {
    *  physical tail - too short and the recorder hears the assistant's own voice. */
   voiceSpeakerDrainMs: number;
   enabledTools: string[];
+  /** Where web_search sends searches. Optional so installs persisted before it read as built in. The
+   *  key for a key provider lives in the Keychain (services/webSearchKey), never here. */
+  webSearch?: WebSearchSettings;
   thinkingEnabled: boolean;
   /** Cap on the tokens the model may spend thinking per reply. REASONING_BUDGET_AUTO (0) sends no
    *  cap so the model reasons for as long as it wants. Applies only while Thinking is on; the
