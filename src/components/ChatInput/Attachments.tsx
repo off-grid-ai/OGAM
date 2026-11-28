@@ -36,6 +36,14 @@ import { generateId } from '../../utils/generateId';
 // ─── useAttachments hook ──────────────────────────────────────────────────────
 
 /** `onBlocked`: a permission is off, with the line and step to show above the composer. */
+const IMAGE_EXTENSIONS = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'heic', 'heif', 'bmp'];
+
+function isImageFile(fileName: string, mimeType?: string | null): boolean {
+  if (mimeType?.startsWith('image/')) return true;
+  const extension = fileName.split('.').pop()?.toLowerCase() ?? '';
+  return fileName.includes('.') && IMAGE_EXTENSIONS.includes(extension);
+}
+
 export function useAttachments(setAlertState: (state: AlertState) => void, onBlocked?: (readiness: Readiness) => void) {
   const [attachments, setAttachments] = useState<MediaAttachment[]>([]);
   const isPickingRef = useRef(false);
@@ -154,6 +162,19 @@ export function useAttachments(setAlertState: (state: AlertState) => void, onBlo
       const file = result[0];
       if (!file) return;
       const fileName = file.name || 'document';
+      if (isImageFile(fileName, file.type)) {
+        // The document picker can't be limited to readable types (code files have no
+        // reliable MIME type), so an image can be picked here. Point to Photo instead of
+        // calling it unsupported.
+        setAlertState(
+          showAlert(
+            'Use Photo for Images',
+            `"${fileName}" is an image. To attach it, choose Photo instead of Document.`,
+            [{ text: 'OK' }],
+          ),
+        );
+        return;
+      }
       if (!documentService.isSupported(fileName)) {
         setAlertState(
           showAlert(

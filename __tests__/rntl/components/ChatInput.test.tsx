@@ -788,6 +788,27 @@ describe('ChatInput', () => {
       expect(result.queryByTestId('attachments-container')).toBeNull();
     });
 
+    it('points to Photo when an image is picked as a document', async () => {
+      mockPick.mockResolvedValue([{
+        uri: 'file:///picked/photo.JPG',
+        name: 'photo.JPG',
+        type: 'image/jpeg',
+        size: 5000,
+      }]);
+
+      const result = render(
+        <ChatInput {...defaultProps} />
+      );
+
+      pressAttachDocument(result);
+
+      await waitFor(() => {
+        expect(result.getByText('Use Photo for Images')).toBeTruthy();
+      });
+      expect(result.queryByText('Unsupported File')).toBeNull();
+      expect(result.queryByTestId('attachments-container')).toBeNull();
+    });
+
     it('does nothing when document picker is cancelled', async () => {
       const cancelError = new Error('User cancelled');
       (cancelError as any).code = 'OPERATION_CANCELED';
