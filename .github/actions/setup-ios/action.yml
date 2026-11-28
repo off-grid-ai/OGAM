@@ -27,6 +27,16 @@ outputs:
 runs:
   using: composite
   steps:
+    # The iOS 26 SDK: the Background Assets downloader extension (StoreDownloaderExtension, AssetPack)
+    # does not exist in older SDKs, and the runner images still default to Xcode 16.
+    - name: Use Xcode 26
+      shell: bash
+      run: |
+        xcode=$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -1)
+        if [ -z "$xcode" ]; then echo "::error::No Xcode 26 on this runner image; the iOS 26 SDK is required." >&2; exit 1; fi
+        sudo xcode-select -s "$xcode"
+        xcodebuild -version
+
     - name: Setup Ruby for iOS dependencies
       uses: ruby/setup-ruby@v1
       with:
